@@ -76,7 +76,10 @@
       const result = await session.turn({ message: message, mode: 'direct', timeoutMs: 15000 });
       if (current !== epoch) return;
       if (result && result.status === 'ok' && typeof result.reply === 'string') {
-        append('TherapyBot', result.reply, 'Unvalidated safety route: ' + result.safety.route + '. This is not clinical advice.');
+        const caution = result.safety && ['urgent_review', 'immediate', 'unknown'].includes(result.safety.route)
+          ? 'This prototype cannot determine whether urgent help is needed. If someone is in immediate danger, call your local emergency number.'
+          : '';
+        append('TherapyBot', result.reply, caution);
       } else {
         append('TherapyBot', result && result.message ? result.message : 'I could not complete that turn. Please try again.');
       }
