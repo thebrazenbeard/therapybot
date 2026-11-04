@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TherapyBot browser-neural asset custody manifest — developer-only",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model", "runtime", "policy", "assets"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source_revision", "source_url", "license_spdx", "license_evidence_url", "rights_clearance"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"},
+        "source_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source_url": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^https://(?:huggingface\\.co|github\\.com)(?::443)?/[A-Za-z0-9._~!$&'()*+,;=:@/-]+$"},
+        "license_spdx": {"const": "Apache-2.0"},
+        "license_evidence_url": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^https://(?:huggingface\\.co|github\\.com)(?::443)?/[A-Za-z0-9._~!$&'()*+,;=:@/-]+$"},
+        "rights_clearance": {"enum": ["pending", "reviewed"]}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "version", "mode"],
+      "properties": {
+        "package": {"const": "@wllama/wllama"},
+        "version": {"const": "3.8.1"},
+        "mode": {"const": "self-hosted"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offline_after_install", "automatic_download", "external_runtime_fetch", "explicit_download_consent", "conversation_storage_default", "contains_private_data"],
+      "properties": {
+        "offline_after_install": {"const": true},
+        "automatic_download": {"const": false},
+        "external_runtime_fetch": {"const": false},
+        "explicit_download_consent": {"const": true},
+        "conversation_storage_default": {"const": "none"},
+        "contains_private_data": {"const": false}
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "path", "sha256", "size_bytes"],
+        "properties": {
+          "role": {"enum": ["runtime-js", "runtime-wasm", "compat-wasm", "compat-worker", "model-part"]},
+          "path": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^(?:assets|vendor)/(?:[A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912}
+        }
+      },
+      "allOf": [
+        {"contains": {"properties": {"role": {"const": "runtime-js"}}, "required": ["role"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"role": {"const": "runtime-wasm"}}, "required": ["role"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"role": {"const": "compat-wasm"}}, "required": ["role"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"role": {"const": "compat-worker"}}, "required": ["role"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"role": {"const": "model-part"}}, "required": ["role"]}, "minContains": 1, "maxContains": 16}
+      ]
+    }
+  }
+}
