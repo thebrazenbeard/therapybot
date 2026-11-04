@@ -1,0 +1,7 @@
+{
+  "name": "therapybot-ephemeral-browser-neural-ci",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Manual public-only browser neural smoke driver; never deployed",
+  "dependencies": {"puppeteer-core": "25.16.0"}
+}
