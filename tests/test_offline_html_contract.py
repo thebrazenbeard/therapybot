@@ -34,7 +34,8 @@ class OfflineHTMLContract(unittest.TestCase):
     def test_unsaved_local_multiturn_dom_smoke(self):
         completed = subprocess.run(
             ["node", str(ROOT / "tests" / "offline_html_smoke.js")],
-            cwd=ROOT, text=True, capture_output=True, timeout=10, check=True,
+            cwd=ROOT, text=True, encoding="utf-8", capture_output=True,
+            timeout=10, check=True,
         )
         self.assertIn("PASS: offline DOM smoke", completed.stdout)
 
@@ -54,7 +55,7 @@ class OfflineHTMLContract(unittest.TestCase):
             "console.log(JSON.stringify(qs.map(q=>c.reply(q))));"
         )
         completed = subprocess.run(
-            ["node", "-e", script], cwd=ROOT, text=True,
+            ["node", "-e", script], cwd=ROOT, text=True, encoding="utf-8",
             capture_output=True, timeout=10, check=True,
         )
         answers = json.loads(completed.stdout)

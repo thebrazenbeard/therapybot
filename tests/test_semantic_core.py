@@ -24,6 +24,7 @@ class EmbeddedSemanticCoreTests(unittest.TestCase):
             cwd=ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=10,
             check=True,
         )
@@ -202,7 +203,8 @@ class EmbeddedSemanticCoreTests(unittest.TestCase):
               s.reply('Actually, I prefer gentle responses');
               console.log(JSON.stringify({calls,version:context.TherapyBotSemanticCore.version}));
             """],
-            cwd=ROOT, capture_output=True, text=True, timeout=10, check=True,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            timeout=10, check=True,
         )
         result = json.loads(output.stdout)
         self.assertEqual(result["calls"], 0)

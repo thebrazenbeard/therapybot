@@ -80,7 +80,7 @@ class ExecutedProvenanceContracts(unittest.TestCase):
           console.log(JSON.stringify(outputs));
         """
         run = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True,
-                             text=True, check=True, timeout=10)
+                             text=True, encoding="utf-8", check=True, timeout=10)
         outputs = json.loads(run.stdout)
         register = {row["id"]: row for row in json.loads(
             (ROOT / "research" / "sources.json").read_text(encoding="utf-8"))}
@@ -102,7 +102,7 @@ class ExecutedProvenanceContracts(unittest.TestCase):
              '我感到孤独和悲伤','أنا حزين ووحيد'].map(x=>core.reply(x))));
         """
         run = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True,
-                             text=True, check=True, timeout=10)
+                             text=True, encoding="utf-8", check=True, timeout=10)
         for result in json.loads(run.stdout):
             self.assertFalse(result.get("citations"), "Unsupported language cannot get spurious references")
             self.assertRegex(result["reply"].lower(), r"(?:english|language|cannot reliably)")
