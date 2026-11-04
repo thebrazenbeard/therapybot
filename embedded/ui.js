@@ -23,15 +23,39 @@
   const cancelEditButton = byId('cancel-member-edit');
   const memberFeedback = byId('member-feedback');
 
-  // Conversation context is intentionally a volatile JavaScript array.
-  // No localStorage, sessionStorage, IndexedDB, cookies or API requests.
-  let history = [];
+  // The adapter owns volatile conversation context; this UI still owns the
+  // user-defined Council roster. Neither layer uses browser persistence.
+  const conversation = window.TherapyBotConversationAdapter && window.TherapyBotEmbedded &&
+    typeof window.TherapyBotConversationAdapter.createSession === 'function' &&
+    typeof window.TherapyBotEmbedded.respond === 'function'
+    ? window.TherapyBotConversationAdapter.createSession({
+      providers: [{
+        id: 'embedded-semantic', kind: 'bounded-semantic',
+        execution: 'browser-local', respond: window.TherapyBotEmbedded.respond
+      }],
+      defaultProviderId: 'embedded-semantic',
+      council: window.TherapyBotCouncil
+    }) : null;
   let generation = 0;
   let sending = false;
   let members = [];
   let nextMemberId = 1;
   let editingMemberId = null;
   let councilSelected = false;
+  // Track the reader's intent before a responsive reflow changes scrollHeight.
+  // Browsers do not reliably preserve bottom alignment on desktop-to-mobile
+  // resize, even when the latest reply was fully visible beforehand.
+  let followingLatest = true;
+  log.addEventListener('scroll', () => {
+    followingLatest = log.scrollHeight - log.clientHeight - log.scrollTop <= 40;
+  });
+  window.addEventListener('resize', () => {
+    if (!followingLatest) return;
+    window.requestAnimationFrame(() => {
+      // An explicit instant reposition avoids a smooth-scroll delay after reflow.
+      log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+    });
+  });
 
   const make = (tag, className, content) => {
     const el = document.createElement(tag);
@@ -41,7 +65,7 @@
   };
 
   function engineAvailable() {
-    return Boolean(window.TherapyBotEmbedded && typeof window.TherapyBotEmbedded.respond === 'function');
+    return Boolean(conversation);
   }
 
   function councilAvailable() {
@@ -53,7 +77,7 @@
     status.textContent = available ? 'Embedded semantic · ready' : 'Engine unavailable';
     status.classList.toggle('error', !available);
     sendButton.disabled = sending || !available;
-    if (!available) setFeedback('Bundled engine.js was not loaded. Open the complete embedded/ folder to use this experiment.', true);
+    if (!available) setFeedback('The bundled conversation adapter or engine.js was not loaded. Open the complete embedded/ folder to use this experiment.', true);
   }
 
   function setFeedback(text, error = false) {
@@ -115,11 +139,17 @@
       remove.type = 'button';
       remove.setAttribute('aria-label', 'Remove ' + member.name);
       remove.addEventListener('click', () => {
+        const removedPosition = members.findIndex((candidate) => candidate.id === member.id);
         members = members.filter((candidate) => candidate.id !== member.id);
         if (editingMemberId === member.id) resetMemberEditor();
         if (!members.length) councilSelected = false;
         renderMembers();
         updateCouncilControls();
+        // The focused Remove button no longer exists after rerendering. Move
+        // focus to the next member's Edit control, or back to Manage members.
+        const editActions = memberList.querySelectorAll('.member-card-actions button:first-child');
+        const nextEditAction = editActions[Math.min(removedPosition, editActions.length - 1)];
+        (nextEditAction || manageButton).focus();
         setMemberFeedback(member.name + ' removed from this tab. This does not erase conversation messages.');
       });
       actions.append(edit, remove);
@@ -257,12 +287,37 @@
 
   function clearChat() {
     generation += 1;
-    history = [];
+    if (conversation) conversation.clear();
     log.replaceChildren();
     welcomeBack();
     messageField.value = '';
     setFeedback('Conversation cleared. Your unsaved Council member definitions remain in this tab until refresh.');
     messageField.focus();
+  }
+
+  function requestedMode(message) {
+    if (/^council\s*:/i.test(message)) return 'council';
+    if (/^solo\s+[^:\n]{1,64}\s*:/i.test(message)) return 'solo';
+    if (/^integrate\s*:/i.test(message)) return 'integration';
+    if (/^containment\s*:/i.test(message)) return 'containment';
+    return councilSelected ? 'council' : 'direct';
+  }
+
+  function presentationForUi(result) {
+    const view = result.presentation || {};
+    const register = Array.isArray(window.TherapyBotEmbeddedCatalog) ? window.TherapyBotEmbeddedCatalog : [];
+    const sources = (result.sourceIds || []).map((id) => register.find((record) => record.id === id))
+      .filter(Boolean).map((record) => ({ id: record.id, title: record.title, url: record.url }));
+    return {
+      reply: result.reply,
+      speakers: view.speakers || [],
+      introduction: view.introduction || '',
+      facilitator: view.facilitator || '',
+      state: { topic: view.topic || null, councilMode: view.councilMode || null },
+      supportedTopic: view.supportedTopic === true,
+      safety: result.safety,
+      sources
+    };
   }
 
   function forgetAll() {
@@ -294,43 +349,27 @@
     messageField.value = '';
 
     try {
-      const result = await Promise.resolve(window.TherapyBotEmbedded.respond({
+      const result = await conversation.turn({
         message,
-        history: history.slice(-10),
+        mode: requestedMode(message),
+        members: members.map((member) => ({ ...member })),
         style: byId('style').value,
         depth: byId('depth').value,
-      }));
+      });
       if (epoch !== generation) return;
-      if (!result || typeof result.reply !== 'string' || result.engine !== 'embedded-semantic') {
-        throw new Error('Unexpected embedded-engine response format.');
+      if (!result || result.status !== 'ok' || typeof result.reply !== 'string' || result.providerId !== 'embedded-semantic') {
+        throw new Error(result?.reason || 'Unexpected local conversation response format.');
       }
-      // The base engine always executes first. High-risk routing cannot be
-      // downgraded by an experimental role-play / Council layer.
-      const councilResult = councilAvailable() && result.safety?.route === 'normal'
-        ? await Promise.resolve(window.TherapyBotCouncil.respond({
-          message,
-          members: members.map((member) => ({ ...member })),
-          history: history.slice(-10),
-          baseResult: result,
-          mode: councilSelected ? 'council' : undefined,
-        }))
-        : result;
-      if (epoch !== generation) return;
-      if (!councilResult || typeof councilResult.reply !== 'string') throw new Error('Unexpected Council response format.');
-      if (result.safety?.route !== 'normal' && councilResult !== result) {
-        throw new Error('The Council cannot replace a safety response.');
-      }
-      appendMessage('assistant', councilResult.reply, councilResult);
-      history.push({ role: 'user', content: message }, { role: 'assistant', content: councilResult.reply });
-      if (history.length > 12) history = history.slice(-12);
-      const councilMode = councilResult.state?.councilMode;
+      const shown = presentationForUi(result);
+      appendMessage('assistant', shown.reply, shown);
+      const councilMode = shown.state.councilMode;
       if (councilMode === 'containment') {
         councilSelected = false;
         updateCouncilControls();
       }
       setFeedback(councilMode
         ? 'Experimental ' + councilMode + ' reflection · these are user-authored perspectives, not diagnoses.'
-        : councilResult.supportedTopic
+        : shown.supportedTopic
           ? 'Structured topic response · review the sources and limits.'
           : 'Limited topic coverage · do not rely on this as professional guidance.');
     } catch (error) {

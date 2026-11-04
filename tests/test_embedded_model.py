@@ -239,7 +239,7 @@ class EmbeddedModelContract(unittest.TestCase):
         scanner = _ElementScanner()
         scanner.feed((EMBEDDED / "index.html").read_text(encoding="utf-8"))
         script_paths = [attrs["src"] for tag, attrs in scanner.tags if tag == "script" and "src" in attrs]
-        self.assertEqual(script_paths, ["catalog.js", "engine.js", "council.js", "ui.js"])
+        self.assertEqual(script_paths, ["catalog.js", "engine.js", "council.js", "conversation_adapter.js", "ui.js"])
         for script in script_paths:
             self.assertTrue((EMBEDDED / script).is_file())
         ids = {attrs.get("id") for _tag, attrs in scanner.tags}
