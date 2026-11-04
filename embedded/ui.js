@@ -170,6 +170,7 @@
       return;
     }
     councilSelected = !councilSelected;
+    if (councilSelected) openCouncilSetup(false);
     updateCouncilControls();
     setFeedback(councilSelected
       ? 'Council selected. Your next message will invite your user-defined perspectives; this is not clinical assessment.'

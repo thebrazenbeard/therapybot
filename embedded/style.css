@@ -149,4 +149,29 @@ h1 em { color: var(--mint); font-style: normal; }
 @media (max-width: 1080px) { .workspace { grid-template-columns: 245px minmax(0,1fr); } .sidebar { padding: 36px 24px; } .main-heading { align-items: stretch; flex-direction: column; } .engine-card { width: fit-content; } }
 @media (max-width: 800px) { .masthead { min-height: 74px; padding: 15px 20px; } .workspace { display: flex; flex-direction: column; } .main-content { order: 0; } .sidebar { order: 1; min-height: 0; border-right: 0; border-top: 1px solid var(--line); padding: 24px 21px 22px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; } .sidebar-intro { grid-column: 1 / -1; } .sidebar-intro h2 { margin: 11px 0; } .sidebar-block { border-top: 1px solid var(--line); padding-top: 14px; } .sidebar-bottom { grid-column: 1 / -1; margin: 0; } .main-content { padding: 29px 20px; } .main-heading { flex-direction: row; align-items: flex-end; } }
 @media (max-width: 620px) { .masthead { align-items: flex-start; } .masthead-right { max-width: 160px; } .head-pill { white-space: normal; text-align: center; font-size: 9px; padding: 6px; } .identity-name { font-size: 20px; } .identity-caption { font-size: 8px; letter-spacing: .1em; } .sidebar { grid-template-columns: 1fr; gap: 9px; } .sidebar-intro h2 { font-size: 25px; } .sidebar-block { margin-top: 7px; } .privacy-block { margin-top: 3px; } .sidebar-bottom { padding-top: 12px; } .main-heading { flex-direction: column; align-items: flex-start; } .engine-card { width: 100%; } .chat-header { padding: 17px; } .council-toolbar, .council-setup { padding: 15px 17px; } .council-toolbar { align-items: stretch; } .council-actions { width: 100%; } .council-actions button { flex: 1; } .member-fields { grid-template-columns: 1fr; } .member-card { flex-direction: column; } .conversation-log { min-height: 300px; max-height: 52vh; padding: 19px 13px; } .welcome-panel { padding: 12px; } .message { max-width: 97%; } .composer { padding: 17px; } .composer-footer { align-items: stretch; flex-direction: column; } .controls { gap: 9px; } .send-button { justify-content: center; } .page-footer { flex-direction: column; gap: 8px; } .page-footer>div { max-width: 100%; } }
+@media (max-width: 620px) {
+  .main-content { padding: 15px 13px 20px; }
+  .main-heading { gap: 8px; margin-bottom: 12px; }
+  .main-heading h1 { margin: 7px 0 2px; font-size: 29px; }
+  .main-heading .lead { display: none; }
+  .engine-card { padding: 8px 12px; gap: 1px; border-radius: 8px; }
+  .engine-label, .engine-subtitle { display: none; }
+  .safety-alert { padding: 9px 10px; gap: 8px; margin-bottom: 10px; }
+  .safety-alert p { font-size: 11px; line-height: 1.4; }
+  .chat-header { padding: 11px 13px; gap: 7px; }
+  .chat-header h2 { margin-top: 3px; font-size: 15px; }
+  .chat-header-actions { gap: 9px; }
+  .status-chip { padding: 5px 8px; }
+  .council-toolbar, .council-setup { padding: 10px 13px; }
+  .council-toolbar { gap: 8px; }
+  .council-primary, .council-secondary { padding: 8px 10px; }
+  .conversation-log { min-height: 145px; max-height: 36vh; padding: 10px 12px; }
+  .welcome-panel { padding: 3px; }
+  .welcome-mark, .welcome-panel h3, .welcome-panel p { display: none; }
+  .suggestion-list .suggestion:nth-child(n+2) { display: none; }
+  .suggestion { padding: 8px 10px; }
+  .composer { padding: 10px 13px; }
+  #message { min-height: 70px; }
+  .composer-footer { margin-top: 8px; gap: 8px; }
+}
 @media (prefers-reduced-motion: reduce) { .conversation-log { scroll-behavior: auto; } }

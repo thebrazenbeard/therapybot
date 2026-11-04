@@ -238,6 +238,8 @@ async function run() {
     await test('Convene and conduct a live two-turn Council exchange', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#convene-council', (element) => element.getAttribute('aria-pressed')), 'true');
+      assert.equal(await page.$eval('#council-setup', (element) => element.hidden), true,
+        'The editor must collapse so conversation can take priority.');
       const first = await send(page, 'I want to set a clear boundary with a colleague. What am I overlooking?');
       assert.deepEqual(first.speakers, ['Strategist', 'Guardian']);
       assert.match(first.text, /not evidence of separate people or diagnoses/i);
