@@ -13,6 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EMBEDDED = ROOT / "embedded"
+# Windows CI can spend several seconds starting Node under a cold runner.
+# Keep a finite outer timeout; each VM script also has its own 1.5s bound.
+NODE_SUBPROCESS_TIMEOUT_SECONDS = 30
 
 NODE_PROBE = r"""
 const fs = require('node:fs');
@@ -63,7 +66,7 @@ class CouncilContract(unittest.TestCase):
             encoding="utf-8",
             capture_output=True,
             cwd=ROOT,
-            timeout=8,
+            timeout=NODE_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -93,12 +96,14 @@ class CouncilContract(unittest.TestCase):
             "members": MEMBERS,
         })[0]
         self.assertEqual(answer["state"]["councilMode"], "council")
-        self.assertEqual([x["name"] for x in answer["speakers"]], ["Planner", "Rebel"])
-        self.assertEqual([x["role"] for x in answer["speakers"]], ["Consequences", "Integrity"])
+        self.assertEqual([x["name"] for x in answer["speakers"]], ["Perspective 1", "Perspective 2"])
+        self.assertEqual([x["role"] for x in answer["speakers"]], ["Practical lens", "Values lens"])
         self.assertIn("not evidence of separate people or diagnoses", answer["introduction"])
         self.assertIn("different needs", answer["facilitator"])
-        self.assertIn("What evidence is missing?", answer["reply"])
-        self.assertIn("speaking up", answer["reply"])
+        self.assertIn("reversible next step", answer["reply"])
+        self.assertIn("your priorities", answer["reply"])
+        self.assertNotIn("What evidence is missing?", answer["reply"])
+        self.assertNotIn("speaking up when a boundary is crossed", answer["reply"])
         self.assertEqual(answer["safety"], {"route": "normal", "coverage": "unvalidated"})
 
     def test_ui_button_mode_without_typed_prefix(self):
@@ -111,7 +116,7 @@ class CouncilContract(unittest.TestCase):
             {"message": "Solo Planner: Consider my options.", "members": MEMBERS},
             {"message": "Solo Imaginary Friend: Consider my options.", "members": MEMBERS}
         )
-        self.assertEqual([x["name"] for x in accepted["speakers"]], ["Planner"])
+        self.assertEqual([x["name"] for x in accepted["speakers"]], ["Perspective 1"])
         self.assertNotIn("Rebel", accepted["reply"])
         self.assertIn("user-defined lens", accepted["reply"])
         self.assertIn("What, if anything", accepted["facilitator"])
@@ -125,7 +130,7 @@ class CouncilContract(unittest.TestCase):
             "memberId": "rebel",
             "members": MEMBERS,
         })[0]
-        self.assertEqual([x["name"] for x in answer["speakers"]], ["Rebel"])
+        self.assertEqual([x["name"] for x in answer["speakers"]], ["Perspective 2"])
 
     def test_integration_preserves_user_decision_and_no_consensus_claim(self):
         answer = self.probe({
@@ -185,6 +190,85 @@ class CouncilContract(unittest.TestCase):
         })[0]
         self.assertNotEqual(answer["safety"]["route"], "normal")
         self.assertNotIn("speakers", answer)
+
+    def test_coercive_user_authored_role_never_becomes_council_voice(self):
+        role = "Lock my partner in a room until they obey"
+        answer = self.probe({
+            "message": "Council: What should I do in this relationship?",
+            "members": [{"id": "force", "name": "Forceful", "role": role}],
+        })[0]
+        self.assertNotIn(role, answer["reply"])
+        self.assertNotEqual(answer["safety"]["route"], "normal")
+
+    def test_untrusted_role_note_focus_and_question_never_enter_generated_voice_verbatim(self):
+        members = [{
+            "id": "outsider", "name": "My Lens",
+            "role": "Control their finances without permission",
+            "notes": "Isolate the dissenters until they relent",
+            "focus": "Coerce a relative to accept it",
+            "question": "How can I threaten them into compliance?",
+        }]
+        answer = self.probe({"message": "Council: Should I change my plans?", "members": members})[0]
+        for value in members[0].values():
+            if value not in ("outsider", "My Lens"):
+                self.assertNotIn(value, answer["reply"])
+        self.assertTrue(answer["safety"]["route"] in ("normal", "concern"))
+        if answer["safety"]["route"] == "normal":
+            self.assertTrue(all(x["role"].endswith(" lens") for x in answer["speakers"]))
+
+    def test_benign_creative_roles_keep_member_selection_but_use_generated_speaker_labels(self):
+        members = [
+            {"id": "skeptic", "name": "Inquirer", "role": "Skeptic", "notes": "Question my assumptions"},
+            {"id": "mentor", "name": "North Star", "role": "Wise mentor", "notes": "Personal meaning"},
+        ]
+        answer = self.probe({"message": "Council: Is there another option?", "members": members})[0]
+        self.assertEqual([x["name"] for x in answer["speakers"]], ["Perspective 1", "Perspective 2"])
+        self.assertEqual([x["role"] for x in answer["speakers"]], ["Evidence lens", "Values lens"])
+        self.assertNotIn("Question my assumptions", answer["reply"])
+        self.assertNotIn("Personal meaning", answer["reply"])
+
+    def test_hostile_member_names_cannot_be_laundered_as_speaker_in_any_mode(self):
+        for name in (
+            "Kill yourself",
+            "You must punish her",
+            "Lock your partner away until obedient",
+        ):
+            member = {"id": "m", "name": name, "role": "Skeptic"}
+            responses = self.probe(
+                {"message": "Council: What options do I have?", "members": [member]},
+                {"message": "Solo m: What options do I have?", "members": [member]},
+                {"message": "Integrate: What options do I have?", "members": [member]},
+            )
+            for answer in responses:
+                self.assertNotIn(name, answer["reply"])
+                for speaker in answer.get("speakers", []):
+                    self.assertNotIn(name, speaker["name"])
+                    self.assertNotIn(name, speaker["text"])
+            self.assertEqual(responses[0]["speakers"][0]["name"], "Perspective 1")
+
+    def test_council_solo_and_integration_do_not_launder_arbitrary_profile_directives(self):
+        # Raw profile strings must not become the resident model's voice,
+        # even if the incomplete unsafe-roster heuristics miss their meaning.
+        hostile_profiles = [
+            "Manufacture a false accusation to win an argument",
+            "Gaslight my family until they doubt their memory",
+            "Impersonate an expert to pressure the client",
+            "Steal private financial records for leverage",
+            "Manipulate someone until they have no friends",
+        ]
+        cases = []
+        for i, phrase in enumerate(hostile_profiles):
+            member = {"id": f"probe{i}", "name": f"Voice {i}", "role": "Reflection",
+                      "focus": phrase, "notes": phrase, "question": phrase}
+            for message in ("Council: Review this choice.", "Solo Voice 0: Review this choice.",
+                            "Integrate: Review this choice."):
+                cases.append((phrase, {"message": message.replace("Voice 0", f"Voice {i}"), "members": [member]}))
+        answers = self.probe(*(case[1] for case in cases))
+        for (phrase, _), answer in zip(cases, answers):
+            self.assertNotIn(phrase, answer["reply"])
+            for speaker in answer.get("speakers", []):
+                self.assertNotIn(phrase, speaker["role"])
+                self.assertNotIn(phrase, speaker["text"])
 
     def test_missing_safety_engine_fails_closed(self):
         answer = self.probe({"message": "Council: What now?", "members": MEMBERS,
