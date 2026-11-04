@@ -22,10 +22,10 @@ It is **not psychotherapy, diagnosis, treatment, a clinically validated safety s
 
 Python 3.11+ and a modern browser are required (backup uses SQLite in-memory serialization). For AI chat, run a separately installed local GGUF model with KoboldCPP or llama.cpp exposing `/v1/chat/completions`.
 
-Clone the repository, then use the Python inside its virtual environment—no shell activation or execution-policy change required.
+Until PR #1 is merged, this working prototype lives on the **`feat/local-html-mvp` branch**, not on `main`. Clone that branch, then use the Python inside its virtual environment—no shell activation or execution-policy change required.
 
 ```bash
-git clone https://github.com/thebrazenbeard/therapybot.git
+git clone --branch feat/local-html-mvp --single-branch https://github.com/thebrazenbeard/therapybot.git
 cd therapybot
 ```
 

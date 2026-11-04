@@ -7,6 +7,9 @@ assess intent, diagnose anyone, or rule out danger when no pattern matches.
 import re
 
 _EXPLICIT_SELF_HARM = [
+    r"\bi (?:just )?(?:overdosed on|took an overdose of)\b.{0,65}",
+    r"\bi (?:just )?(?:shot|stabbed) myself\b",
+    r"\bi (?:just )?cut myself (?:deeply|badly|severely)\b.{0,75}\b(?:bleeding|blood|won'?t stop|will not stop)\b",
     r"\bi (?:might|may|could) (?:kill myself|end my life|commit suicide|hurt myself)\b.{0,90}\b(?:tonight|today|now|pills?|gun|knife|plan|means)\b",
     r"\bi (?:have|got) (?:a |the )?(?:bottle|handful|pack|packet) of (?:[a-z-]+ ){0,3}(?:pills|tablets|capsules|medication) and i (?:am|[']m) about to (?:take|swallow) (?:them|it|all)\b",
     r"\bi (?:do not|don't) think i can (?:stay|keep myself) safe (?:tonight|today|now|anymore)\b",
@@ -23,7 +26,7 @@ _EXPLICIT_SELF_HARM = [
     r"\bi (?:just )?(?:drank|swallowed|ingested) (?:some |a |the )?(?:antifreeze|poison|bleach|pesticide|cleaning fluid)\b",
     r"\b(?:voices|a voice) (?:are |is )?(?:telling|ordering|commanding) me to (?:jump(?: off| from)?|kill myself|hurt myself|end my life)\b",
 ]
-_PERSON = r"(?:my (?:coworker|colleague|boss|partner|wife|husband|spouse|ex|friend|child|son|daughter|mother|father|sister|brother|neighbor|roommate|teacher)|someone|somebody|him|her|them|people|a (?:person|coworker|friend|neighbor)|the (?:person|neighbor|teacher))"
+_PERSON = r"(?:my (?:coworker|colleague|boss|partner|wife|husband|spouse|ex|friend|child|children|kids|son|daughter|mother|father|parents|sister|brother|neighbor|roommate|teacher)|someone|somebody|him|her|them|people|a (?:person|coworker|friend|neighbor)|the (?:person|neighbor|teacher))"
 _EXPLICIT_VIOLENCE = [
     r"\bi (?:want to|might|may|plan to|intend to|will|am going to) (?:kill|shoot|stab|hurt|murder|attack) my (?:kids|children|family|parents|siblings)\b.{0,45}\b(?:tonight|today|now|soon|right now)\b",
     rf"\b(?:i(?:'m| am) going to|i(?:'m| am) about to|i (?:will|intend to|plan to)) (?:kill|stab|shoot|attack|hurt|murder) {_PERSON}\b",
@@ -34,7 +37,7 @@ _EXPLICIT_VIOLENCE = [
     rf"\bi (?:am|'m) holding a (?:knife|gun) (?:to|against|at) {_PERSON} (?:right now|now|today)\b",
 ]
 _HYPOTHETICAL_PREFIX = re.compile(
-    r"^\s*(?:in (?:a|my) (?:story|novel|script)|for (?:a|my) (?:story|novel)|hypothetically|imagine|what if|a character|i'm writing|i am writing)\b",
+    r"^\s*(?:in (?:a|my) (?:story|novel|script|screenplay)|for (?:a|my) (?:story|novel|screenplay)|hypothetically|imagine|what if|a character|i'm writing|i am writing)\b",
     re.I,
 )
 _AMBIGUOUS_SELF_HARM = re.compile(
@@ -48,10 +51,11 @@ _HELP_FOR_OTHER = re.compile(r"^\s*(?:how can i (?:get|find) help for|what (?:ca
 _TRAILING_ATTRIBUTION = re.compile(r"[,\s\"']+(?:said|says|wrote|texted) (?:my (?:child|daughter|son|partner|friend|wife|husband|spouse|mother|father)|he|she|they|someone)\b", re.I)
 _DENIED_CURRENT_INTENT = re.compile(r"\bbut i (?:am not|'m not|won'?t|will not|do not|don't) (?:going to |planning to |intend to )?(?:do it|act on it|hurt myself|kill myself|end my life)\b", re.I)
 _HARM_COMMANDS = re.compile(r"\b(?:voices|a voice)\b.{0,65}\b(?:telling|ordering|commanding) me to (?:hurt|kill|shoot|attack|stab) (?:other people|others|someone|people|my family|my kids)\b", re.I)
+_TRAFFIC_IMPULSE = re.compile(r"\b(?:i (?:may|might|could|feel like i(?:'ll| will))|and (?:may|might|could)) (?:run|walk|step|jump) into (?:oncoming )?traffic\b", re.I)
 _METHOD_SEEKING = re.compile(r"\b(?:how many|what (?:dose|amount|number) of)\b.{0,75}\b(?:pills|tablets|capsules|medications|drugs)\b.{0,75}\b(?:to die|kill myself|fatal|lethal)|\bhow (?:can|do) i (?:kill myself|end my life)\b", re.I)
 _ANALYTICAL_PREFIX = re.compile(r"^\s*(?:please )?(?:explain|analyze|analyse|define|translate|interpret|compare|discuss) (?:why |how |what )?(?:the (?:sentence|phrase|words|quote)|a (?:sentence|phrase|quote)|why people say)\b", re.I)
 _HISTORICAL_PREFIX = re.compile(r"^\s*(?:yesterday i (?:wrote|said|told)|(?:last year|years ago|back then|in \d{4})\b|i used to\b)", re.I)
-_FICTION_CONTEXT = re.compile(r"\b(?:the (?:protagonist|character) says|a fictional character|in my (?:novel|story|script))\b", re.I)
+_FICTION_CONTEXT = re.compile(r"\b(?:the (?:protagonist|character) says|a fictional character|in (?:my|a) (?:novel|story|script|screenplay))\b", re.I)
 _REALITY_CUE = re.compile(r"\b(?:this is real and i (?:am|'m) not safe|i (?:am|'m) not safe|this is not (?:fiction|hypothetical|a story)|in real life|i really mean it)\b", re.I)
 _THREAT_TO_USER = re.compile(r"\b(?:my (?:husband|wife|partner|spouse|ex|neighbor|coworker)|someone) (?:is )?(?:threatening|about) to (?:kill|stab|shoot|attack|hurt) me (?:right now|now|tonight|today)\b", re.I)
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|\n+|;\s+")
@@ -137,6 +141,14 @@ def urgent_reply(text: str) -> str | None:
                 "or is anyone at risk right now? If you may act, move away from weapons and other "
                 "people and contact local emergency services if someone is in immediate danger. "
                 "I can't make the call."
+            )
+            continue
+        if _TRAFFIC_IMPULSE.search(clause):
+            clarification = (
+                "Are you thinking of acting on that impulse now? Please stay away from traffic "
+                "and ask someone nearby for help if you can. If you might act or cannot stay safe, "
+                "contact local emergency services. In the US you can call or text 988. "
+                "I cannot call for you."
             )
             continue
         if self_danger:
