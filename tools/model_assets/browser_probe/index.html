@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:">
+  <meta name="referrer" content="no-referrer">
+  <title>TherapyBot · Browser neural boundary probe</title>
+  <link rel="stylesheet" href="./probe.css">
+  <script type="module" src="./probe.mjs"></script>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="eyebrow">THERAPYBOT / DEVELOPMENT PROBE</p>
+      <h1>A small room for a local model.</h1>
+      <p class="lede">No account. No chat server. No automatic model download. No model or Wllama runtime is bundled with this source-only demonstration.</p>
+    </header>
+
+    <section class="panel" aria-labelledby="setup-title">
+      <div class="step">01 / SELECT</div>
+      <h2 id="setup-title">Choose a GGUF on this device</h2>
+      <p>The browser will read files you explicitly select; this page will not fetch model weights from a URL. The files must be rights-cleared and independently verified before a real release.</p>
+      <label class="label" for="model-files">Model file or ordered GGUF parts</label>
+      <input id="model-files" type="file" accept=".gguf" multiple>
+      <p class="hint" id="selection-report" aria-live="polite">No files selected.</p>
+      <label class="consent"><input id="load-consent" type="checkbox"> <span>I understand this is experimental and authorize this page to load only my selected file(s) into local memory.</span></label>
+      <button id="load-model" type="button" disabled>Initialize selected local model</button>
+      <p id="runtime-report" class="hint" role="status" aria-live="polite">Runtime assets: not bundled or initialized.</p>
+      <p id="isolation-report" class="hint">Browser isolation: checking…</p>
+    </section>
+
+    <section class="panel" aria-labelledby="talk-title">
+      <div class="step">02 / TALK</div>
+      <h2 id="talk-title">Conversation test</h2>
+      <p>Only enabled after a real local model successfully loads. Model-generated replies are unverified and not clinical guidance.</p>
+      <form id="chat-form">
+        <label class="label" for="prompt">Your words</label>
+        <textarea id="prompt" maxlength="1000" rows="4" placeholder="What would you like to explore?" disabled></textarea>
+        <button type="submit" id="ask-model" disabled>Ask local model</button>
+      </form>
+      <div id="response" class="response" role="log" aria-live="polite">Waiting for a verified local runtime and an explicitly selected model. No inference has occurred.</div>
+    </section>
+
+    <footer>Prototype boundary only · Wllama 3.8.1 API contract · No model weights · No diagnosis or clinical validation · Nothing saved by this page</footer>
+  </main>
+</body>
+</html>
