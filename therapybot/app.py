@@ -30,6 +30,9 @@ class AppServer(ThreadingHTTPServer):
         self.vault = vault
         self.model = model
         self.csrf = secrets.token_urlsafe(32)
+        # The Fernet key and HTTP session token are one authorization state.
+        # Neither may be updated independently of the other request threads.
+        self.auth_lock = threading.RLock()
         self.session = None  # Issued only after a correct vault passphrase.
         self.model_responded = False  # Only true after this process observed a reply.
         super().__init__(address, Handler)
@@ -85,10 +88,11 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def _authorized_session(self):
-        if not self.server.vault.unlocked or not self.server.session or not secrets.compare_digest(self.headers.get("X-TherapyBot-Session", ""), self.server.session):
-            self._error(403, "Unlock your local vault in this browser session")
-            return False
-        return True
+        with self.server.auth_lock:
+            if not self.server.vault.unlocked or not self.server.session or not secrets.compare_digest(self.headers.get("X-TherapyBot-Session", ""), self.server.session):
+                self._error(403, "Unlock your local vault in this browser session")
+                return False
+            return True
 
     def _body(self):
         if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
@@ -123,30 +127,41 @@ class Handler(BaseHTTPRequestHandler):
                 self._bytes(raw.encode("utf-8"), "text/html; charset=utf-8")
             elif path == "/api/status":
                 endpoint_reachable = self._model_ready()
-                self._json({"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,
+                with self.server.auth_lock:
+                    storage = "unlocked" if self.server.vault.unlocked else "locked"
+                    initialized = self.server.vault.initialized
+                self._json({"version": __version__, "storage": storage, "initialized": initialized,
                             "endpoint_reachable": endpoint_reachable, "ready": endpoint_reachable and self.server.model_responded,
                             "model": self.server.model.url, "model_name": self.server.model.model_name, "source_count": len(sources()),
                             "persistence_default": False, "local_only": True})
             elif path == "/api/sources":
                 self._json({"sources": sources()})
             elif path == "/api/history":
-                if not self._authorized_session():
-                    return
-                history = self.server.vault.list("chat")
+                with self.server.auth_lock:
+                    if not self._authorized_session():
+                        return
+                    history = self.server.vault.list("chat")
                 self._json({"messages": [{"id": r["id"], "created_at": r["created_at"], **r["content"]} for r in reversed(history)]})
             elif path == "/api/journal":
-                if not self._authorized_session():
-                    return
-                self._json({"entries": self.server.vault.list("journal")})
+                with self.server.auth_lock:
+                    if not self._authorized_session():
+                        return
+                    entries = self.server.vault.list("journal")
+                self._json({"entries": entries})
             elif path == "/api/search":
-                if not self._authorized_session():
-                    return
                 q = urllib.parse.parse_qs(parsed.query).get("q", [""])[0][:200]
-                self._json({"results": self.server.vault.search(q)})
+                with self.server.auth_lock:
+                    if not self._authorized_session():
+                        return
+                    results = self.server.vault.search(q)
+                self._json({"results": results})
             elif path == "/api/backup":
-                if not self._authorized_mutation() or not self._authorized_session():
+                if not self._authorized_mutation():
                     return
-                blob = self.server.vault.backup()
+                with self.server.auth_lock:
+                    if not self._authorized_session():
+                        return
+                    blob = self.server.vault.backup()
                 self._bytes(blob, "application/x-sqlite3", extra={"Content-Disposition": 'attachment; filename="therapybot-encrypted-backup.sqlite3"'})
             elif path == "/api/safety-resources":
                 self._json({"us": "In the United States, call or text 988 for crisis support. If danger is immediate, call emergency services.", "url": "https://988lifeline.org/get-help/"})
@@ -165,14 +180,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = self._body()
             if self.path == "/api/unlock":
-                self.server.vault.unlock(data.get("passphrase"))
-                self.server.session = secrets.token_urlsafe(32)
-                self._json({"storage": "unlocked", "session": self.server.session})
+                with self.server.auth_lock:
+                    self.server.vault.unlock(data.get("passphrase"))
+                    self.server.session = secrets.token_urlsafe(32)
+                    issued_session = self.server.session
+                self._json({"storage": "unlocked", "session": issued_session})
             elif self.path == "/api/lock":
-                if not self._authorized_session():
-                    return
-                self.server.vault.lock()
-                self.server.session = None
+                with self.server.auth_lock:
+                    if not self._authorized_session():
+                        return
+                    self.server.vault.lock()
+                    self.server.session = None
                 self._json({"storage": "locked"})
             elif self.path == "/api/chat":
                 msg = data.get("message")
@@ -181,10 +199,12 @@ class Handler(BaseHTTPRequestHandler):
                 save = data.get("save", False)
                 if not isinstance(save, bool):
                     raise ValueError("Save must be a boolean")
-                if save and not self.server.vault.unlocked:
-                    raise VaultError("Unlock your vault to save chat records")
-                if save and not self._authorized_session():
-                    return
+                if save:
+                    with self.server.auth_lock:
+                        if not self.server.vault.unlocked:
+                            raise VaultError("Unlock your vault to save chat records")
+                        if not self._authorized_session():
+                            return
                 context = data.get("context") if isinstance(data.get("context"), list) else []
                 safety = classify(msg, context)
                 citations = source_search(msg)
@@ -203,18 +223,24 @@ class Handler(BaseHTTPRequestHandler):
                     if safety == "concern" and mode == "model":
                         reply = CONCERN_PREFIX + reply
                 if save:
-                    self.server.vault.add("chat", {"user": msg, "assistant": reply})
+                    # The model call may outlive the session that authorized
+                    # it. Re-check immediately before the write.
+                    with self.server.auth_lock:
+                        if not self._authorized_session():
+                            return
+                        self.server.vault.add("chat", {"user": msg, "assistant": reply})
                 self._json({"reply": reply, "mode": mode, "safety": safety, "citations": [{"title": c["title"], "url": c["url"]} for c in citations]})
             elif self.path == "/api/journal":
-                if not self._authorized_session():
-                    return
                 body = data.get("text")
                 mood = data.get("mood")
                 if not isinstance(body, str) or not body.strip() or len(body) > 12000:
                     raise ValueError("Journal entry must contain 1 to 12000 characters")
                 if mood is not None and (type(mood) is not int or not 0 <= mood <= 10):
                     raise ValueError("Mood must be an integer from 0 to 10")
-                rid = self.server.vault.add("journal", body, mood)
+                with self.server.auth_lock:
+                    if not self._authorized_session():
+                        return
+                    rid = self.server.vault.add("journal", body, mood)
                 self._json({"id": rid}, 201)
             else:
                 self._error(404, "Not found")
@@ -231,11 +257,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path != "/api/records":
                 return self._error(404, "Not found")
-            if not self._authorized_session():
-                return
             if self.headers.get("X-TherapyBot-Confirm") != "DELETE":
                 return self._error(400, "Deletion requires explicit confirmation")
-            self._json({"deleted": self.server.vault.delete_all()})
+            with self.server.auth_lock:
+                if not self._authorized_session():
+                    return
+                deleted = self.server.vault.delete_all()
+            self._json({"deleted": deleted})
         except VaultError as exc:
             self._error(423, str(exc))
 
