@@ -228,3 +228,26 @@ test('reader wheel input during reflow overrides prior bottom-follow intent', as
   window.fire('resize');
   assert.equal(log.scrollTop, 250, 'user scrolling up during reflow must win');
 });
+
+test('scroll-to-top after responsive resize cancels queued bottom pin', async () => {
+  const { document, window } = createFakeDom();
+  const log = document.getElementById('conversation-log');
+  log.scrollHeight = 1000;
+  log.clientHeight = 400;
+  log.scrollTop = 600;
+  await log.fire('scroll');
+
+  let pendingFrame = null;
+  window.requestAnimationFrame = (callback) => { pendingFrame = callback; };
+  log.scrollHeight = 1800;
+  log.clientHeight = 240;
+  window.fire('resize');
+  assert.equal(typeof pendingFrame, 'function');
+
+  // Keyboard navigation and script-driven accessibility can set the top
+  // without a wheel/touch event while a resize frame is still queued.
+  log.scrollTo({ top: 0, behavior: 'instant' });
+  await log.fire('scroll');
+  pendingFrame();
+  assert.equal(log.scrollTop, 0, 'a later reader scroll must cancel queued pin');
+});

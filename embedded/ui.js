@@ -45,27 +45,33 @@
   // resize, even when the latest reply was fully visible beforehand.
   let followingLatest = true;
   let lastLogGeometry = null;
+  let lastScrollTop = null;
   let readerScrollInput = false;
   for (const eventName of ['wheel', 'touchmove', 'keydown']) {
     log.addEventListener(eventName, () => { readerScrollInput = true; });
   }
   log.addEventListener('scroll', () => {
     const geometry = [log.scrollHeight, log.clientHeight];
+    const explicitTopNavigation = lastScrollTop !== null && lastScrollTop > 0 &&
+      log.scrollTop === 0 && log.scrollHeight > log.clientHeight;
     // A responsive reflow can dispatch a scroll event *before* window.resize.
     // The reader did not scroll, so preserve their last explicit position
     // rather than treating the newly enlarged document as a scroll-up.
-    if (readerScrollInput || !lastLogGeometry || geometry.every((value, i) => value === lastLogGeometry[i])) {
+    if (readerScrollInput || explicitTopNavigation || !lastLogGeometry || geometry.every((value, i) => value === lastLogGeometry[i])) {
       followingLatest = log.scrollHeight - log.clientHeight - log.scrollTop <= 40;
     }
     readerScrollInput = false;
+    lastScrollTop = log.scrollTop;
     lastLogGeometry = geometry;
   });
   window.addEventListener('resize', () => {
     if (!followingLatest) return;
     window.requestAnimationFrame(() => {
+      if (!followingLatest) return; // The reader may have scrolled meanwhile.
       // An explicit instant reposition avoids a smooth-scroll delay after reflow.
       log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
       lastLogGeometry = [log.scrollHeight, log.clientHeight];
+      lastScrollTop = log.scrollTop;
     });
   });
 
