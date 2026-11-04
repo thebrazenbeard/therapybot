@@ -131,6 +131,7 @@ async function send(page, message) {
       reply: latest?.querySelector('.message-content, .council-speakers, .council-facilitator')?.textContent?.trim() || '',
       text: latest?.innerText || '',
       speakers: [...(latest?.querySelectorAll('.council-speaker-name') || [])].map((element) => element.textContent),
+      userLabels: [...(latest?.querySelectorAll('.council-speaker-user-label') || [])].map((element) => element.textContent),
       meta: latest?.querySelector('.message-meta')?.textContent || '',
       feedback: document.querySelector('#form-feedback')?.textContent || '',
       warning: latest?.classList.contains('message--warning') || false,
@@ -221,6 +222,33 @@ async function run() {
       await screenshot(page, artifactDir, '01-empty.png');
     });
 
+    await test('Emergency contacts remain available without JavaScript', async () => {
+      const disabled = await browser.newPage();
+      try {
+        await disabled.setJavaScriptEnabled(false);
+        await disabled.goto(origin + '/', { waitUntil: 'load', timeout: 20000 });
+        const panel = await disabled.evaluate(() => {
+          const section = document.querySelector('#immediate-help');
+          return {
+            label: section?.querySelector('#emergency-title')?.textContent || '',
+            links: [...(section?.querySelectorAll('a') || [])].map((link) => link.getAttribute('href')),
+            visible: section ? getComputedStyle(section).display !== 'none' : false,
+            shortcut: document.querySelector('.emergency-shortcut a')?.getAttribute('href') || '',
+          };
+        });
+        assert.match(panel.label, /Need urgent help/i);
+        assert.equal(panel.visible, true);
+        assert(panel.links.includes('tel:911'));
+        assert(panel.links.includes('tel:18002221222'));
+        assert(panel.links.includes('tel:988'));
+        assert.equal(panel.shortcut, '#immediate-help');
+        await disabled.click('.emergency-shortcut a');
+        assert.equal(new URL(disabled.url()).hash, '#immediate-help');
+      } finally {
+        await disabled.close();
+      }
+    });
+
     await test('Convene without members prompts authorship, not invented people', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#council-setup', (element) => element.hidden), false);
@@ -235,23 +263,78 @@ async function run() {
       assert.match(await page.$eval('#council-count', (element) => element.textContent), /2 members/);
     });
 
+    await test('Without JavaScript, Add member cannot submit private text or navigate', async () => {
+      const disabled = await browser.newPage();
+      try {
+        await disabled.setJavaScriptEnabled(false);
+        await disabled.goto(origin + '/', { waitUntil: 'load', timeout: 20000 });
+        // Only unhide the native controls for a failure-mode probe; no page JS.
+        await disabled.addStyleTag({ content: '#council-setup[hidden] { display: block !important; }' });
+        await disabled.type('#member-name', 'SyntheticSecretName');
+        await disabled.type('#member-role', 'SyntheticSecretRole');
+        await disabled.type('#member-notes', 'SyntheticSecretNotes');
+        const navigations = [];
+        disabled.on('request', (request) => {
+          if (request.isNavigationRequest()) navigations.push(request.url());
+        });
+        const navigation = disabled.waitForNavigation({ timeout: 1200 }).then(() => true, () => false);
+        await disabled.click('#save-member');
+        assert.equal(await navigation, false, 'A disabled-script editor must not submit a native request');
+        assert.equal(disabled.url(), origin + '/');
+        assert.deepEqual(navigations, []);
+      } finally {
+        await disabled.close();
+      }
+    });
+
+    await test('Without JavaScript, Send cannot submit conversation text or navigate', async () => {
+      const disabled = await browser.newPage();
+      try {
+        await disabled.setJavaScriptEnabled(false);
+        await disabled.goto(origin + '/', { waitUntil: 'load', timeout: 20000 });
+        await disabled.type('#message', 'SyntheticPrivateConversationDoNotTransmit');
+        assert.equal(await disabled.$eval('.noscript-notice', (element) => getComputedStyle(element).display !== 'none'), true);
+        const navigations = [];
+        disabled.on('request', (request) => {
+          if (request.isNavigationRequest()) navigations.push(request.url());
+        });
+        const navigation = disabled.waitForNavigation({ timeout: 1200 }).then(() => true, () => false);
+        await disabled.click('#send-message');
+        assert.equal(await navigation, false, 'A disabled-script composer must not submit a native request');
+        assert.equal(disabled.url(), origin + '/');
+        assert.deepEqual(navigations, []);
+      } finally {
+        await disabled.close();
+      }
+    });
+
     await test('Convene and conduct a live two-turn Council exchange', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#convene-council', (element) => element.getAttribute('aria-pressed')), 'true');
       assert.equal(await page.$eval('#council-setup', (element) => element.hidden), true,
         'The editor must collapse so conversation can take priority.');
       const first = await send(page, 'I want to set a clear boundary with a colleague. What am I overlooking?');
-      assert.deepEqual(first.speakers, ['Strategist', 'Guardian']);
+      assert.deepEqual(first.speakers, ['Perspective 1', 'Perspective 2']);
+      assert.deepEqual(first.userLabels, ['Your label: Strategist', 'Your label: Guardian']);
       assert.match(first.text, /not evidence of separate people or diagnoses/i);
-      const second = await send(page, 'If I speak plainly but calmly, what would each perspective want me to remember?');
-      assert.deepEqual(second.speakers, ['Strategist', 'Guardian']);
+      const second = await send(page, 'If I speak plainly but calmly to my colleague about that boundary, what would each perspective want me to remember?');
+      assert.deepEqual(second.speakers, ['Perspective 1', 'Perspective 2']);
       assert.equal(await count(page, '.message--user'), 2);
       await screenshot(page, artifactDir, '02-council-conversation.png');
     });
 
+    await test('Unverified Council question abstains instead of inventing a debate', async () => {
+      const answer = await send(page, 'Council: qwerty unknown situation xyz');
+      assert.deepEqual(answer.speakers, []);
+      assert.match(answer.text, /cannot establish a supported topic/i);
+      assert.equal(answer.warning, true);
+    });
+
     await test('Typed Solo command addresses only a configured member', async () => {
-      const answer = await send(page, 'Solo Strategist: What is the next practical question to ask?');
-      assert.deepEqual(answer.speakers, ['Strategist']);
+      // After an unsupported prompt, the earlier topic is not assumed safe to
+      // resurrect. State the actual work context when requesting Solo mode.
+      const answer = await send(page, 'Solo Strategist: For my work conversation with a colleague, what is the next practical question to ask?');
+      assert.deepEqual(answer.speakers, ['Perspective 1']);
       assert.match(answer.text, /user-defined lens/i);
     });
 

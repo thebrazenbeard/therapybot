@@ -17,6 +17,23 @@ from .storage import Vault, VaultError
 
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
+EMBEDDED = Path(__file__).resolve().parent.parent / "embedded"
+EMBEDDED_ASSETS = {
+    "index.html": "text/html; charset=utf-8",
+    "style.css": "text/css; charset=utf-8",
+    "catalog.js": "text/javascript; charset=utf-8",
+    "engine.js": "text/javascript; charset=utf-8",
+    "council.js": "text/javascript; charset=utf-8",
+    "ui.js": "text/javascript; charset=utf-8",
+    "manifest.json": "application/json; charset=utf-8",
+}
+# The bundled Council is a separate volatile client. It does not access the
+# encrypted vault or the local GGUF API, and must not submit HTML forms.
+EMBEDDED_CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "connect-src 'none'; form-action 'none'; frame-ancestors 'none'; "
+    "base-uri 'none'; object-src 'none'"
+)
 MAX_BODY = 48_000
 
 
@@ -43,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
         # URLs and messages might be personal. Intentionally no request logs.
         return
 
-    def _headers(self, code, content_type, length, extra=None):
+    def _headers(self, code, content_type, length, extra=None, csp=None):
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(length))
@@ -51,13 +68,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.send_header("Content-Security-Policy", csp or "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         for name, val in (extra or {}).items():
             self.send_header(name, val)
         self.end_headers()
 
-    def _bytes(self, data, content_type="application/octet-stream", code=200, extra=None):
-        self._headers(code, content_type, len(data), extra)
+    def _bytes(self, data, content_type="application/octet-stream", code=200, extra=None, csp=None):
+        self._headers(code, content_type, len(data), extra, csp)
         self.wfile.write(data)
 
     def _json(self, data, code=200):
@@ -121,6 +138,12 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 raw = (STATIC / "index.html").read_text(encoding="utf-8").replace("{{CSRF_TOKEN}}", self.server.csrf)
                 self._bytes(raw.encode("utf-8"), "text/html; charset=utf-8")
+            elif path in ("/embedded", "/embedded/") or path.startswith("/embedded/"):
+                asset = "index.html" if path in ("/embedded", "/embedded/") else path[len("/embedded/"):]
+                if parsed.query or asset not in EMBEDDED_ASSETS:
+                    self._error(404, "Not found")
+                    return
+                self._bytes((EMBEDDED / asset).read_bytes(), EMBEDDED_ASSETS[asset], csp=EMBEDDED_CSP)
             elif path == "/api/status":
                 endpoint_reachable = self._model_ready()
                 self._json({"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,

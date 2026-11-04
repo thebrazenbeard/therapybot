@@ -21,7 +21,7 @@
         'Which consequence are you trying to avoid, and what part of this decision is under your control?',
         'Would it help to separate what has been documented from what is still being assumed?'
       ],
-      sources: ['who-mental-health']
+      sources: ['who-world-mental-health-2022']
     },
     {
       key: 'boundaries',
@@ -36,7 +36,7 @@
         'What consequence would make that boundary difficult to hold?',
         'What would an enforceable boundary look like within your actual constraints?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'relationships',
@@ -51,12 +51,14 @@
         'Are you trying to understand their behavior, decide what to say, or work out your own limits?',
         'What would respectful communication look like here without requiring you to ignore your own needs?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'anger',
-      words: ['angry', 'anger', 'furious', 'rage', 'resentment', 'frustrated', 'frustration', 'irritated', 'enraged', 'mad', 'vent'],
-      phrases: ['pissed off', 'need to vent', 'so angry', 'fed up'],
+      // A request to vent changes the desired response style; by itself it
+      // does not establish anger or supersede the earlier conversation topic.
+      words: ['angry', 'anger', 'furious', 'rage', 'resentment', 'frustrated', 'frustration', 'irritated', 'enraged', 'mad'],
+      phrases: ['pissed off', 'so angry', 'fed up'],
       openings: [
         'Anger does not, by itself, establish a desire to hurt anyone. I can listen without jumping to that conclusion.',
         'I can take the frustration seriously without deciding in advance what it means.'
@@ -81,7 +83,7 @@
         'What kind of contact feels useful rather than draining?',
         'What would you want more of, without giving up the space you need?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'trauma',
@@ -96,7 +98,7 @@
         'What feels most important about this experience in your own words?',
         'What would help you keep control over how much of this you examine today?'
       ],
-      sources: ['nimh-psychotherapies', 'who-mental-health']
+      sources: ['nimh-psychotherapies', 'who-world-mental-health-2022']
     },
     {
       key: 'mood',
@@ -111,7 +113,7 @@
         'Is there an immediate pressure you want to unpack first?',
         'What would make the next part of today even slightly more manageable?'
       ],
-      sources: ['nimh-psychotherapies', 'who-mental-health']
+      sources: ['nimh-psychotherapies', 'who-world-mental-health-2022']
     },
     {
       key: 'identity',
@@ -130,10 +132,11 @@
     }
   ]);
 
-  const UNKNOWN = 'I do not have enough context to give a trustworthy interpretation. I can help examine a practical problem, a relationship, an emotion, or a question about meaning. Which part do you want to start with?';
+  const UNKNOWN = 'I do not have enough context to give a trustworthy interpretation. These experimental rules cover only limited English topics; I cannot reliably interpret other languages or assess safety. I can help examine a practical problem, a relationship, an emotion, or a question about meaning. Which part do you want to start with?';
   const LISTEN = 'You can vent. I will stay with what you have actually said rather than rushing into solutions.';
   const URGENT = 'I cannot assess danger from a chat message. If someone may be in immediate danger, contact local emergency services now. In the U.S., you can call or text 988 for crisis support. If this describes the past, a hypothetical, or someone else, you can clarify; I will not silently assume otherwise.';
   const CONCERN = 'I want to take that seriously without deciding what you meant. Are you describing a current concern, a past experience, or a hypothetical question?';
+  const LANGUAGE_LIMIT = 'This experimental version currently supports English only. Your message may use another language. I cannot reliably understand it or check it for safety. If someone may be in immediate danger, contact local emergency services. You can try describing the situation in English if you choose; I will not guess what you meant.';
 
   function clean(value, limit) {
     return typeof value === 'string' ? value.slice(0, limit).normalize('NFKC').replace(/[\u2018\u2019]/g, "'").toLowerCase() : '';
@@ -141,6 +144,38 @@
 
   function words(value) {
     return clean(value, 8000).match(/[\p{L}\p{N}]+/gu) || [];
+  }
+
+  // This conservative signal is NOT language identification or translation.
+  // Abstain on sustained non-Latin writing, not one foreign letter, numerical
+  // symbols, names or short quotations in English. For Latin-script languages
+  // require two Spanish phrase cues; other languages may reach UNKNOWN, whose
+  // explicit English-only disclosure does not assert that they are safe.
+  // Known danger cues must be evaluated before this partial heuristic.
+  function unsupportedLanguageSignal(message) {
+    const text = clean(message, 8000).replace(/^(?:council|integrate|containment)\s*:\s*/, '');
+    const foreignScript = /[\u0370-\u03ff\u0400-\u052f\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\u0900-\u097f\u0e00-\u0e7f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u;
+    let letters = 0;
+    let foreignLetters = 0;
+    for (const character of text) {
+      if (!/\p{L}/u.test(character)) continue;
+      letters += 1;
+      if (foreignScript.test(character)) foreignLetters += 1;
+    }
+    // Short utterances may express immediate danger in only a few characters.
+    // Requiring a script majority avoids treating a stray symbol in otherwise
+    // English text as a language change; the 3-letter floor is intentionally
+    // precautionary and still not sufficient for reliable language detection.
+    if (foreignLetters >= 3 && foreignLetters / letters >= 0.7) return true;
+    const bounded = function (expression) {
+      return new RegExp('(?:^|[^\\p{L}])(?:' + expression + ')(?=$|[^\\p{L}])', 'u').test(text);
+    };
+    const spanishMarkers = [
+      'me siento', 'tengo miedo', 'necesito ayuda', 'no s[eé]',
+      'qu[eé] (?:hago|hacer)', 'mi pareja',
+      'estoy (?:muy )?(?:triste|asustad[oa]|deprimid[oa])', 'no puedo'
+    ];
+    return spanishMarkers.filter(bounded).length >= 2;
   }
 
   function riskRoute(message) {
@@ -152,7 +187,8 @@
     // a different present-tense disclosure later in the same message.
     const clauses = text.split(/(?<=[.!?;])\s+|\s*;\s*|\s*,?\s+but\s+|\s+and now\s+/);
     for (const clause of clauses) {
-      const fictional = /\b(?:fiction|fictional|novel|screenplay|book character|hypothetical|grammar example|song lyrics|nightmare)\b/.test(clause);
+      const quotedExample = /\b(?:for (?:an? )?(?:english|grammar) (?:exercise|lesson|class)|quoted (?:an? )?(?:fictional|example|line|sentence))\b/.test(clause);
+      const fictional = /\b(?:fiction|fictional|novel|screenplay|book character|hypothetical|grammar example|song lyrics|nightmare)\b/.test(clause) || quotedExample;
       if (historicalAndResolved && /\b(?:years ago|last year|in the past|used to)\b/.test(clause)) continue;
       const negatedIntent = /\b(?:do not|don't|never|not|won't|will not)\s+(?:plan|intend|want|going|about|hurt|kill)\b/.test(clause);
       const negatedConcern = /\b(?:not suicidal|not going to hurt|don't want to die|do not want to die|never want to die|never suicidal|not about suicide|don't intend to harm|do not intend to harm)\b/.test(clause);
@@ -163,6 +199,23 @@
       const quantifiedMedication = /\b(?:i|we)\s+(?:(?:just|already|recently)\s+)?(?:took|swallowed|ingested|ate)\s+(?:\d{2,}|dozens? of)\s+(?:\w+\s+){0,2}(?:painkillers?|pills?|tablets?|capsules?|medications?|pain ?medications?)\b/.test(clause) &&
         /\b(?:just|now|today|tonight|recently|already|this morning|this evening)\b/.test(clause);
       const acuteOverdose = /\b(?:i|we)\s+(?:just|already|recently)?\s*overdosed\b/.test(clause);
+      // Bounded synthetic preflight cues. These are not a general poison,
+      // violence, emergency, or suicide classifier; retain uncertainty and
+      // the fiction/historical/negation gates applied to the other cues.
+      const acuteToxicIngestion = /\b(?:i|we)\s+(?:(?:just|already|recently)\s+)?(?:swallowed|drank|ingested|ate|consumed)\b.{0,90}\b(?:antifreeze|ethylene glycol|methanol)\b/.test(clause) &&
+        /\b(?:just|already|recently|minutes? ago|hours? ago|now|right now|today|tonight|this morning|this evening)\b/.test(clause) &&
+        !/\b(?:i|we)\s+(?:did not|didn't|never)\s+(?:swallow|drink|ingest|eat|consume)\b/.test(clause);
+      const currentWeaponThreat = /\b(?:my\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex|friend|roommate)|someone|he|she|they)\b.{0,80}\b(?:has|held|holding|put|pressed|pointed|aimed)\b.{0,35}\b(?:(?:a|the|his|her)\s+)?(?:knife|blade)\b.{0,35}\b(?:at|against|to|on)\s+my\s+(?:throat|neck)\b/.test(clause) &&
+        /\b(?:right now|now|tonight|today|currently|at this moment)\b/.test(clause) &&
+        !/\b(?:does not|doesn't|did not|didn't|never)\s+(?:have|hold|put|press|point|aim)\b/.test(clause);
+      const currentPassiveWeaponThreat = /\b(?:i am|i'm)\s+(?:(?:actually|currently)\s+)?being\s+(?:threatened|held|pinned)\b.{0,85}\b(?:knife|blade)\b.{0,45}\b(?:against|at|to|on)\s+my\s+(?:throat|neck)\b/.test(clause) &&
+        /\b(?:right now|now|today|tonight|currently|at this moment)\b/.test(clause);
+      const thirdPersonImminentJump = /\b(?:my\s+)?(?:friend|daughter|son|child|partner|spouse|husband|wife|brother|sister|mother|father|roommate|he|she|they)\b.{0,55}\b(?:about to|going to|plans? to|intend(?:s)? to|will)\s+(?:jump|step)\s+(?:off|from)\s+(?:(?:a|the|this)\s+)?(?:parking garage|garage|bridge|roof|building|cliff|ledge)\b/.test(clause) &&
+        !/\b(?:is|are|was|were|am)\s+not\s+(?:about to|going to)\b/.test(clause) &&
+        !/\b(?:isn't|aren't|wasn't|weren't)\s+(?:about to|going to)\b/.test(clause);
+      const thirdPersonUnresponsiveIngestion = /\b(?:my\s+)?(?:daughter|son|child|baby|partner|spouse|husband|wife|friend|brother|sister|mother|father)\b.{0,75}\b(?:swallowed|took|ingested|ate)\b.{0,60}\b(?:pills?|tablets?|capsules?|medication|medicine)\b/.test(clause) &&
+        /\b(?:unresponsive|unconscious|not breathing|won't wake|cannot wake|can't wake|not waking up)\b/.test(clause) &&
+        !/\b(?:not|isn't|wasn't)\s+(?:unresponsive|unconscious)\b/.test(clause);
       const recentFistful = /\b(?:took|swallowed|ingested|ate)\s+(?:a|two|three|several|multiple)?\s*(?:fistfuls?|handfuls?)\b/.test(clause) &&
         /\b(?:pills?|tablets?|medication|painkillers?|fistfuls?)\b/.test(text) &&
         /\b(?:just|already|minutes? ago|hours? ago|now|tonight|today)\b/.test(text);
@@ -192,12 +245,13 @@
       const spanishCurrentIntent = /\b(?:voy a quitarme la vida|me voy a suicidar|voy a matarme)\b/.test(clause) &&
         /\b(?:esta noche|ahora|hoy|ya|pronto)\b/.test(clause);
       const immediate = (acuteIngestion && !routineMedication) || (quantifiedMedication && !routineMedication) ||
+        acuteToxicIngestion || currentWeaponThreat || currentPassiveWeaponThreat || thirdPersonImminentJump || (thirdPersonUnresponsiveIngestion && !routineMedication) ||
         acuteOverdose || recentFistful || acuteBleeding || bandageSoaking || acuteBreathing || acuteInjury || weaponAtSelf || imminentJump ||
         atLedge || garageCarbonMonoxide || thirdPersonImminent || spanishCurrentIntent || (explicitCurrentIntent && !negatedIntent);
       // A fictional frame describes source context; it must not automatically
       // mask a subsequent direct disclosure. Ambiguous same-clause fiction is
       // clarified rather than treated as established live intent.
-      if (immediate && (!fictional || /\b(?:in real life|actually i|but now|right now i)\b/.test(clause))) return 'urgent_review';
+      if (immediate && (!fictional || (!quotedExample && /\b(?:in real life|actually i|but now|right now i)\b/.test(clause)))) return 'urgent_review';
       if (immediate && fictional) concern = true;
       if (!fictional && (frighteningHarmVoice || frighteningCommand || possibleOtherHarm || ominousObedience || selfErasure)) concern = true;
       if (!fictional && !negatedIntent && !negatedConcern && /\b(?:suicidal|suicide|self harm|self-harm|wish i were dead|want to die|hurt myself|hurt someone|kill myself)\b/.test(clause)) {
@@ -212,8 +266,25 @@
     const direct = /\b(?:my (?:partner|husband|wife|boyfriend|girlfriend|spouse|ex))\b.{0,80}\b(?:hit|punched|assaulted|struck|choked|strangled|slapped|kicked|pushed|threatened|attacked)\s+(?:me|my)\b/.test(text);
     const confinement = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:locked me in|locks me in|keeps me locked|trapped me|traps me|won't let me leave|will not let me leave|prevents me leaving)\b/.test(text);
     const blockedExit = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:blocked (?:the|my|our) (?:doorway|exit|door)|blocked me from leaving|took my phone|has taken my phone)\b/.test(text);
-    const fear = /\b(?:afraid|scared|terrified|unsafe|fear|can't go home|cannot go home|don't feel safe|do not feel safe)\b/.test(text);
+    const fear = /\b(?:afraid|scared|terrified|frightened|unsafe|fear|can't go home|cannot go home|don't feel safe|do not feel safe)\b/.test(text);
     return (direct || confinement || blockedExit) && fear;
+  }
+
+  function unresolvedAcuteFollowup(message, history) {
+    // A new, otherwise benign question must not erase the immediately recent
+    // user's acute disclosure just because it lacks a repeated danger word.
+    // Restrict carry-forward to explicit short followups and the last four
+    // conversation turns: this is not a durable safety state or assessment.
+    // Council and other UI directives are routing prefixes, not user claims;
+    // normalize them before applying short followup continuity. The Council
+    // subsequently runs its own base safety veto with this same message.
+    const text = clean(message, 1000).trim().replace(/^(?:council|integrate|containment|solo\s+[^:]{1,64})\s*:\s*/, '');
+    if (!/^(?:what (?:should|can|do) i do(?: now| next| about (?:it|that|this))?|what (?:now|next)|how (?:should|can|do) i (?:respond|proceed|handle|deal with) (?:this|that|it)|please help (?:me )?(?:now|with (?:this|that|it)))\b/.test(text)) return false;
+    if (/\b(?:safe now|not real|didn't happen|did not happen|fiction|hypothetical|screenplay|false alarm)\b/.test(text)) return false;
+    const recent = Array.isArray(history) ? history.slice(-4).reverse().find(function (item) {
+      return item && item.role === 'user' && typeof item.content === 'string';
+    }) : null;
+    return Boolean(recent && riskRoute(recent.content) === 'urgent_review');
   }
 
   function matchedTopic(text) {
@@ -233,11 +304,28 @@
     return score > 0 ? best : null;
   }
 
+  function isCorrection(message) {
+    return /\b(?:not what i meant|you misunderstood|that's wrong|that is wrong|not talking about that)\b/i.test(clean(message, 8000));
+  }
+
+  function correctionTopic(message) {
+    // A rejected interpretation is a memory boundary. Re-anchor only when the
+    // caller explicitly redirects the topic, rather than matching terms in a
+    // rejected phrase such as "no, not about work".
+    const normalized = clean(message, 8000);
+    const redirect = normalized.match(/\b(?:i (?:actually )?mean(?:t)?|i(?: am|'m) (?:talking|asking) about|it(?:'s| is) about|the issue is)\s+([^.!?]+)(?:[.!?]\s*)?$/);
+    if (!redirect || /^(?:not|no|neither)\b/.test(redirect[1])) return null;
+    return matchedTopic(redirect[1]);
+  }
+
   function previousTopic(history) {
     if (!Array.isArray(history)) return null;
     for (let i = Math.min(history.length, 20) - 1; i >= 0; i -= 1) {
       const item = history[i];
       if (!item || typeof item !== 'object' || item.role !== 'user') continue;
+      // Do not search past an explicit rejection of the earlier interpretation.
+      // A correction that also names a new topic may become the new anchor.
+      if (isCorrection(item.content)) return correctionTopic(item.content);
       const topic = matchedTopic(item.content);
       if (topic) return topic;
     }
@@ -255,8 +343,8 @@
 
   function detectIntent(message) {
     const text = clean(message, 8000);
-    if (/\b(?:just vent|only vent|need to vent|no advice|don't want advice|do not want advice|not looking for advice)\b/.test(text)) return 'listen';
-    if (/\b(?:what should i do|what can i do|how should i|next step|my options|how do i)\b/.test(text)) return 'action';
+    if (/\b(?:just vent|only vent|need to vent|(?:just|only) want to vent|want to vent|no advice|don't want advice|do not want advice|not looking for advice)\b/.test(text)) return 'listen';
+    if (/\b(?:what should i do|what can i do|how should i|next step|my options|how do i|(?:need|want) (?:practical )?options)\b/.test(text)) return 'action';
     if (/\b(?:why|how come|cause|explain|difference between|what does it mean)\b/.test(text)) return 'explain';
     return 'explore';
   }
@@ -286,17 +374,23 @@
     const style = ['direct', 'warm', 'analytical'].includes(options.style) ? options.style : 'direct';
     const interpersonalViolence = partnerViolence(message);
     const observedRisk = riskRoute(message);
-    const route = interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
-    const current = matchedTopic(message);
+    const route = observedRisk === 'urgent_review' || unresolvedAcuteFollowup(message, history) ? 'urgent_review' :
+      interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
+    // English-only rule tables cannot safely interpret detected non-English
+    // input. Keep known danger routes authoritative and suppress Council mode
+    // by returning a non-normal route on an unsupported-language abstention.
+    const languageLimited = route === 'normal' && unsupportedLanguageSignal(message);
+    const corrective = isCorrection(message);
+    const current = corrective ? correctionTopic(message) : matchedTopic(message);
     const prior = previousTopic(history);
     const anaphora = /\b(?:that|this|it|they|them|again|same thing)\b/i.test(message) && words(message).length <= 18;
     const directFollowup = /^(?:what (?:would|should|can) (?:you|i) (?:suggest|recommend|do)|how (?:should|can|do) i (?:respond|proceed|handle|approach)|what are my options|what next)\b/i.test(message) && words(message).length <= 16;
-    const corrective = /\b(?:not what i meant|you misunderstood|that's wrong|that is wrong|not talking about that)\b/i.test(message);
-    const followup = Boolean(!current && prior && !corrective && (anaphora || directFollowup));
+    const preferenceFollowup = /\b(?:need|want) (?:practical )?options\b/i.test(message) && words(message).length <= 16;
+    const followup = Boolean(!current && prior && !corrective && (anaphora || directFollowup || preferenceFollowup));
     const topic = current || (followup ? prior : null);
     const intent = detectIntent(message);
-    const state = { topic: topic ? topic.key : null, followup };
-    const safety = { route, coverage: 'unvalidated' };
+    const state = { topic: languageLimited ? null : topic ? topic.key : null, followup: languageLimited ? false : followup };
+    const safety = { route: languageLimited ? 'concern' : route, coverage: 'unvalidated' };
     let reply;
     let uncertainty;
 
@@ -309,12 +403,18 @@
     } else if (route === 'concern') {
       reply = CONCERN;
       uncertainty = 'A lexical cue triggered clarification; this is not a clinical risk assessment.';
+    } else if (languageLimited) {
+      reply = LANGUAGE_LIMIT;
+      uncertainty = 'A partial unsupported-language heuristic prompted abstention; it cannot reliably identify the language, understand meaning, or assess safety.';
     } else if (!message) {
       reply = 'What would you like to think through?';
       uncertainty = 'No message was supplied.';
     } else if (/^(?:hi|hello|hey|good morning|good evening)[.!?\s]*$/i.test(message)) {
       reply = 'Hello. What would you like to talk about?';
       uncertainty = 'Greeting only; no topic interpreted.';
+    } else if (corrective && !current) {
+      reply = 'I misunderstood. What did I get wrong, and what would you like me to focus on instead?';
+      uncertainty = 'An explicit correction rejected earlier topic context. I am asking for clarification rather than reviving it.';
     } else if (intent === 'listen') {
       reply = LISTEN + '\n\nWhat would you like me to hear first?';
       uncertainty = 'The request to listen was explicit; no details beyond the supplied message were inferred.';
@@ -341,9 +441,9 @@
     return {
       reply,
       engine: 'embedded-semantic',
-      supportedTopic: Boolean(topic),
+      supportedTopic: Boolean(topic && !languageLimited),
       uncertainty,
-      sources: sourceLinks(topic, route, interpersonalViolence),
+      sources: languageLimited ? [] : sourceLinks(topic, route, interpersonalViolence),
       state,
       safety
     };

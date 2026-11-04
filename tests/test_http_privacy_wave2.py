@@ -6,14 +6,22 @@ These tests exercise implementation boundaries, not a security certification.
 import json
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 from therapybot.app import AppServer, create_server
 from therapybot.model import ModelClient, ModelError
 from therapybot.storage import Vault
+
+# This is the test client's *outer* loopback deadline, not a server timeout.
+# The vault uses a 10-second SQLite busy timeout; Windows CI can also delay a
+# first encrypted write. Keep this finite, and never retry a journal POST:
+# an aborted response can occur after a record has already been committed.
+HTTP_REQUEST_TIMEOUT_SECONDS = 15
 
 
 class FakeModel:
@@ -53,7 +61,7 @@ class HttpPrivacyWave2Tests(unittest.TestCase):
             headers={"Content-Type": "application/json", **(headers or {})},
         )
         try:
-            with urllib.request.urlopen(req, timeout=3) as response:
+            with urllib.request.urlopen(req, timeout=HTTP_REQUEST_TIMEOUT_SECONDS) as response:
                 body = response.read()
                 return response.status, dict(response.headers), self.decode(body, response.headers)
         except urllib.error.HTTPError as exc:
@@ -152,6 +160,27 @@ class HttpPrivacyWave2Tests(unittest.TestCase):
         self.assertEqual([], self.call("/api/journal", headers=session)[2]["entries"])
         # Previously downloaded backup remains; the app cannot delete arbitrary copies.
         self.assertGreater(len(backup), 100)
+
+    def test_one_delayed_journal_write_gets_its_response_without_retry(self):
+        """A busy local vault may need more than three seconds to acknowledge a write."""
+        session = self.unlock()
+        original_add = self.server.vault.add
+        calls = []
+
+        def delayed_add(*args, **kwargs):
+            calls.append(1)
+            time.sleep(3.3)
+            return original_add(*args, **kwargs)
+
+        with mock.patch.object(self.server.vault, "add", side_effect=delayed_add):
+            status, _, response = self.call(
+                "/api/journal", method="POST", payload={"text": "SYNTHETIC_SLOW_WRITE"},
+                headers=session,
+            )
+        self.assertEqual(201, status)
+        self.assertEqual(1, len(calls), "Non-idempotent POST must not be retried")
+        self.assertIsInstance(response["id"], int)
+        self.assertEqual(1, len(self.call("/api/journal", headers=session)[2]["entries"]))
 
     def test_second_unlock_rotates_single_process_wide_session(self):
         first = self.unlock()
