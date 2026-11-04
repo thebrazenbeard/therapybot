@@ -121,6 +121,10 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 raw = (STATIC / "index.html").read_text(encoding="utf-8").replace("{{CSRF_TOKEN}}", self.server.csrf)
                 self._bytes(raw.encode("utf-8"), "text/html; charset=utf-8")
+            elif path == "/semantic_core.js":
+                # Exact-path, bundled and offline-only browser helper. No dynamic
+                # file lookup, remote script, or user-controlled template input.
+                self._bytes((STATIC / "semantic_core.js").read_bytes(), "text/javascript; charset=utf-8")
             elif path == "/api/status":
                 endpoint_reachable = self._model_ready()
                 self._json({"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,
