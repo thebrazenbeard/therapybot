@@ -2,15 +2,21 @@
 
 **Status: development-only experimental local-first prototype — not a public interactive mental-health release, professional psychotherapy, medical treatment, a diagnosis tool, or an emergency service.**
 
-TherapyBot is a $0, offline-capable mental-health **support and education** application for Windows and Linux. It pairs a local GGUF model (KoboldCPP or llama.cpp-compatible endpoint) with optional passphrase-encrypted personal records, a local journal, and an inspectable, source-linked psychology/sociology reference register. There are no accounts, analytics, advertising IDs, cloud inference fallbacks, or subscription APIs.
+TherapyBot is a $0, offline-capable mental-health **support and education** project for Windows and Linux. The existing Python application pairs an optional local GGUF endpoint (KoboldCPP or llama.cpp) with passphrase-encrypted personal records, a local journal, and source-linked psychology/sociology references. A **separate developer-only browser experiment** under [`embedded/`](embedded/README.md) ships limited conversational behavior in repository JavaScript without requiring a separately installed model server. Neither implementation is clinically qualified. There are no accounts, analytics, advertising IDs, cloud inference fallbacks, or subscription APIs.
 
-**Web interface distinction:** The real local HTML chat runs only at `http://127.0.0.1:8768` after you start the app and a local model. The [GitHub Pages introduction](https://thebrazenbeard.github.io/therapybot/) links to a [read-only interface preview](https://thebrazenbeard.github.io/therapybot/interface-preview.html), the visual seed for a future richer local UI. Neither public page has chat submission, vault unlock, or model connection. The Pages workflow publishes only `pages/`, never the local-only `static/` interface, personal records, or repository root.
+**Web interface distinction:** The Python HTML/vault application runs at `http://127.0.0.1:8768` with a separately started GGUF endpoint. The experimental [`embedded/index.html`](embedded/index.html) is a second, standalone HTML interface that opens locally with bundled limited semantic logic, no vault, and no neural weights. The [GitHub Pages introduction](https://thebrazenbeard.github.io/therapybot/) and its [interface preview](https://thebrazenbeard.github.io/therapybot/interface-preview.html) remain **read-only**, without chat submission or personal-data inputs. The Pages workflow publishes **only** `pages/`, not `embedded/`, `static/`, personal records, or the repository root.
 
 **Release boundary:** The owner has withheld a general-public interactive release until the documented safety, model-output, privacy, accessibility, source-grounding, and record-compatibility failures are repaired and independently checked. Local development and testing may continue; the public Pages preview remains read-only. The [multi-team T’Kal-in-ket debate](docs/TKAL_HEARING_20261104.md) is an **open design review**, not a release authorization or clinical validation.
 
 > This software has not been clinically validated. Passing synthetic tests does not show that generated responses are safe or effective treatment. An LLM can give harmful, biased, or inaccurate advice. For immediate danger, contact emergency services; in the United States, you can call or text **988**.
 
 ## Run locally
+
+### Repository-resident browser experiment (development only)
+
+Open [`embedded/index.html`](embedded/index.html) from a local checkout in a browser with its neighboring JavaScript/CSS files intact. No Python, external inference service, model download, or internet connection is required for the bounded, in-memory **semantic conversation prototype**. It is **not a trained LLM** and cannot reliably interpret novel distress or danger. Node-based tests pass, but actual browser and assistive-technology behavior is not yet qualified. See [architecture and packaging](docs/REPOSITORY_RESIDENT_MODEL.md) and [privacy and safety gates](docs/EMBEDDED_PRIVACY_SAFETY.md). This experiment is intentionally excluded from public Pages.
+
+### Existing Python/GGUF application
 
 Requirements: Python 3.10+ and a separately installed local inference server; Windows PowerShell or Linux shell. Download model weights separately (never into this repository). Python's `cryptography` package is required for local encrypted records.
 
@@ -38,6 +44,7 @@ One bounded synthetic runtime probe on VN2 verified the **actual TherapyBot HTTP
 ## Current capabilities
 
 - Local browser conversation, selectable style and response depth.
+- Separate, nonpublished repository-resident HTML/JavaScript semantic experiment: limited topic/state dialogue, no model server, no recording, and no trained neural weights.
 - Optional saved conversation history; saving defaults **off**. No silent memory or training on user conversations.
 - Passphrase-encrypted SQLite journal and saved records, local search, encrypted SQLite backup, and record deletion. Unlocking is necessary before saving.
 - Local keyword retrieval over original evidence summaries with clickable external source references. Those references may help ground an answer; they are **not** automatic fact-checking of generated claims.
