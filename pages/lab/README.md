@@ -24,7 +24,8 @@ The Node smoke executes two genuine local adapter turns and verifies transcript 
 - **Not published or merged:** the existing Pages workflow publishes the pages tree; do not merge this lab into a deployed branch before an explicit release decision. Source-only is not a privacy or behavior verification.
 - Test a real user-submitted turn in Chrome, Firefox, and a constrained mobile browser, plus blank, multi-turn, reset, malformed, unsafe, and hostile HTML input cases.
 - Screen for accessible keyboard navigation, screen reader transcript announcement, and viewport/scroll behavior.
-- Conduct independent emergency and self-harm response evaluation. Existing reports indicate unacceptable emergency-route false negatives; **do not claim safe user deployment**.
+- The visible immediate-help banner and a narrow local phrase screen address some explicit warnings; they are **not a reliable crisis detector**. Existing independent tests found unacceptable urgent misses and poor conversational context. **Do not claim safe user deployment**; rerun genuinely blind holdouts after each change.
+- The lab explicitly acknowledges stop/pause instructions, corrections, and unavailable Inner Council rather than pretending they work through its limited semantic engine.
 - Any future neural option must be explicit opt-in after disclosure of first-use model download size, license, versioned Wllama runtime, memory footprint, and no-persistent-cache status. It must not silently replace this rules engine or imply clinical utility.
 - Verify source hashes, license notices, CSP network boundary, and real Chrome/Firefox WebAssembly behavior before changing the static Pages publish path.
 

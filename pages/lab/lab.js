@@ -54,6 +54,30 @@
     setBusy(false);
   }
 
+  function isExplicitDanger(message) {
+    return [
+      /\b(?:i(?:'m| am)|we(?:'re| are)|someone is)\s+(?:in\s+)?(?:immediate\s+)?danger\b/i,
+      /\b(?:about to|going to|will|might|may)\s+(?:hurt|kill|end|harm)\s+(?:myself|ourselves|someone|them|him|her)\b/i,
+      /\b(?:i(?:'m| am| feel)\s+suicidal|i\s+(?:want|plan|intend|might|may)\s+to\s+(?:kill|hurt|harm)\s+myself|i\s+(?:want|plan|intend|might|may)\s+to\s+end\s+my\s+life)\b/i,
+      /\b(?:i(?:'m| am)\s+not safe|someone\s+is\s+(?:threatening|attacking)\s+me)\b/i,
+      /\b(?:i(?:'ve| have)\s+(?:just\s+)?(?:taken|swallowed)\s+(?:a lot of\s+)?(?:pills|poison|medication))\b/i
+    ].some(pattern => pattern.test(message));
+  }
+
+  function limitedResponse(message) {
+    if (isExplicitDanger(message)) return 'This may be urgent, and I cannot assess your safety. If anyone could be harmed right now, please contact local emergency services immediately. In the U.S., call 911 for emergencies or 988 for crisis support. If you can, move away from immediate danger and contact a trusted person nearby.';
+    if (/^(?:please\s+)?(?:stop|pause|stop (?:talking|replying)|leave me alone|enough)[.!?\s]*$/i.test(message)) {
+      return 'Okay. I will stop here. I will not continue unless you send another message. You can clear this chat whenever you want.';
+    }
+    if (/\binner council\b/i.test(message)) {
+      return 'The Inner Council is not available in this limited browser experiment. This page has one rules-based responder, not multiple independent perspectives.';
+    }
+    if (/\b(?:that(?:'s| is) not what i meant|you misunderstood|you(?:'re| are) not listening|not what i said|i did(?:n't| not) say that)\b/i.test(message)) {
+      return 'I may have misunderstood. I have limited context tracking, so please tell me the part I got wrong in your own words.';
+    }
+    return null;
+  }
+
   function reset() {
     epoch += 1;
     if (session) session.clear();
@@ -70,6 +94,11 @@
     if (!message) return;
     field.value = '';
     append('You', message);
+    const bounded = limitedResponse(message);
+    if (bounded !== null) {
+      append('TherapyBot', bounded);
+      return;
+    }
     setBusy(true);
     const current = epoch;
     try {
@@ -96,6 +125,12 @@
     }
   });
   clearButton.addEventListener('click', reset);
+  clearButton.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      reset();
+    }
+  });
   createSession();
   reset();
 })();

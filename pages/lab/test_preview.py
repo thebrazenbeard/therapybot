@@ -30,6 +30,8 @@ class PreviewTests(unittest.TestCase):
         self.assertIn('id="composer"', html)
         self.assertIn('id="message"', html)
         self.assertIn('id="conversation-log"', html)
+        self.assertIn('class="helpbar"', html)
+        self.assertNotIn('Unvalidated safety route:', js)
         self.assertIn("connect-src 'none'", html)
         self.assertIn('runtime/conversation_adapter.js', html)
         self.assertIn("session.turn(", js)

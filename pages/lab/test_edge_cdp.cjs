@@ -85,6 +85,16 @@ try{
   await key(' ');
   await count(1);
   assert.equal(await inspect('document.activeElement.id'),'message');
+  await cdp('Input.insertText',{text:'i am in immediate danger'});
+  await key('Enter',2);
+  await count(3);
+  const urgent = await inspect("document.querySelectorAll('.assistant-message')[1].textContent");
+  assert.ok(urgent.includes('emergency services') && urgent.includes('911'));
+  await cdp('Input.insertText',{text:'stop'});
+  await key('Enter',2);
+  await count(5);
+  const stop = await inspect("document.querySelectorAll('.assistant-message')[2].textContent");
+  assert.ok(stop.includes('stop here'));
   const localOrigin = new URL(url).origin + '/';
   const outside=requests.filter(x => !x.startsWith(localOrigin) && !x.startsWith('data:'));
   assert.deepEqual(outside,[],'Unexpected outbound page request');
@@ -95,8 +105,8 @@ try{
   console.log(JSON.stringify({
     browser:'Edge isolated CDP',url,requests,
     outsidePageRequests:outside.length,jsExceptions:exceptions.length,
-    firstReplyLength:first.length,secondReplyLength:second.length,
-    assertions:['ready','textarea focus','Ctrl+Enter two user turns','answers distinct and not echo','Tab->Send','Space->Clear','focus restored','loopback-only requests']
+    firstReplyLength:first.length,secondReplyLength:second.length,urgentReplyLength:urgent.length,stopReplyLength:stop.length,
+    assertions:['ready','textarea focus','Ctrl+Enter two user turns','answers distinct and not echo','Tab->Send','Space->Clear','focus restored','explicit danger help','stop honored','loopback-only requests']
   },null,2));
 }finally{
   ws.close();
