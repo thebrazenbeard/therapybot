@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self'; connect-src 'self' https://huggingface.co https://us.aws.cdn.hf.co; base-uri 'none'; form-action 'none'; object-src 'none'; img-src 'none'">
+  <title>TherapyBot isolated browser neural proof</title>
+  <link rel="stylesheet" href="./probe.css">
+</head>
+<body>
+  <main>
+    <h1>Private browser-model experiment</h1>
+    <p class="warning">Experimental and unqualified. Not therapy or crisis assessment. Use synthetic test prompts only.</p>
+    <p>No model is loaded on page open. A first download is about 397 MB from Hugging Face and requires explicit permission. No model is cached by this page.</p>
+    <p>Local Wllama v3.8.1 (WASM/worker) is bundled only for this isolated test. CPU one thread, no GPU requirement.</p>
+    <label><input type="checkbox" id="consent"> I consent to a test-only 397 MB model download from the pinned public model origin.</label>
+    <div class="controls">
+      <button type="button" id="preflight">Test only 32-byte model header/CORS</button>
+      <button type="button" id="download" disabled>Download, verify SHA-256, load locally</button>
+    </div>
+    <p>Alternatively choose a previously verified GGUF file (no website download):</p>
+    <input id="file" type="file" accept=".gguf">
+    <button type="button" id="load-file" disabled>Load selected file locally</button>
+    <button type="button" id="cancel">Cancel network transfer (not model load)</button>
+    <pre id="status" aria-live="polite">Idle. No model loaded.</pre>
+    <form id="chat">
+      <label for="prompt">Synthetic prompt (no sensitive information)</label>
+      <textarea id="prompt" rows="4" maxlength="800" disabled>Reply briefly without chain-of-thought: What are two practical questions to ask before accepting a new work shift? /no_think</textarea>
+      <button type="submit" id="generate" disabled>Generate locally</button>
+    </form>
+    <pre id="reply" aria-live="polite"></pre>
+    <p class="warning">Offline/private inference is a hypothesis until the real browser network trace and model are independently verified.</p>
+  </main>
+  <script type="module" src="./probe.js"></script>
+</body>
+</html>

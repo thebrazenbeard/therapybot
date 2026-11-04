@@ -1,0 +1,9 @@
+body { font: 16px/1.5 system-ui, sans-serif; background: #0e1720; color: #e7f2f7; margin: 0; }
+main { width: min(92%, 48rem); margin: 2rem auto; }
+button, input, textarea { font: inherit; }
+button { margin: .35rem .4rem .35rem 0; padding: .6rem .8rem; }
+textarea { display: block; width: 98%; background: #f9fffd; color: #092027; }
+.warning { padding: .9rem; border: 1px solid #eab878; background: #302317; }
+pre { white-space: pre-wrap; word-break: break-word; background: #1e303d; padding: 1rem; min-height: 2rem; }
+label { display: block; margin: .8rem 0; }
+button:disabled { opacity: .45; }
