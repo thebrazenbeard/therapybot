@@ -147,6 +147,57 @@ class EmbeddedModelContract(unittest.TestCase):
         self.assertEqual(answer["state"]["topic"], "work")
         self.assertTrue(answer["state"]["followup"])
 
+    def test_explicit_correction_blocks_revival_of_rejected_conversation_topic(self):
+        history = [
+            {"role": "user", "content": "My boss is asking me to pay for work supplies."},
+            {"role": "assistant", "content": "That can create a workplace constraint."},
+            {"role": "user", "content": "No, that is not what I meant."},
+            {"role": "assistant", "content": "I misunderstood. What did you mean?"},
+        ]
+        answer = self._reply("What should I do about that?", history=history)
+        self.assertIsNone(answer["state"]["topic"])
+        self.assertFalse(answer["state"]["followup"])
+        self.assertFalse(answer["supportedTopic"])
+        self.assertIn("enough context", answer["reply"])
+
+    def test_new_explicit_topic_after_correction_restores_only_that_topic(self):
+        history = [
+            {"role": "user", "content": "My boss is asking me to pay for work supplies."},
+            {"role": "assistant", "content": "That can create a workplace constraint."},
+            {"role": "user", "content": "No, that is not what I meant."},
+            {"role": "assistant", "content": "Please clarify the issue."},
+            {"role": "user", "content": "My partner and I keep disagreeing."},
+            {"role": "assistant", "content": "Relationships can have competing needs."},
+        ]
+        answer = self._reply("What should I do about that?", history=history)
+        self.assertEqual(answer["state"]["topic"], "relationships")
+        self.assertTrue(answer["state"]["followup"])
+
+    def test_direct_topic_after_rejection_uses_current_message_not_old_anchor(self):
+        history = [
+            {"role": "user", "content": "My boss is asking me to pay for work supplies."},
+            {"role": "user", "content": "No, not what I meant."},
+        ]
+        answer = self._reply("My family is arguing about trust.", history=history)
+        self.assertEqual(answer["state"]["topic"], "relationships")
+        self.assertFalse(answer["state"]["followup"])
+
+    def test_correction_with_explicit_redirection_is_the_new_context_anchor(self):
+        history = [
+            {"role": "user", "content": "My boss is demanding money for work expenses."},
+            {"role": "user", "content": "No, that's wrong. I mean my family relationship."},
+            {"role": "assistant", "content": "Tell me what you meant about your family."},
+        ]
+        current, followup, negated = self._probe(
+            {"message": "No, that's wrong. I mean my family relationship.", "history": history[:1]},
+            {"message": "What should I do about that?", "history": history},
+            {"message": "No, that's wrong. Not about work.", "history": history[:1]},
+        )["answers"]
+        self.assertEqual(current["state"]["topic"], "relationships")
+        self.assertEqual(followup["state"]["topic"], "relationships")
+        self.assertTrue(followup["state"]["followup"])
+        self.assertIsNone(negated["state"]["topic"])
+
     def test_explicit_vent_request_does_not_require_topic_keywords(self):
         answer = self._reply("I do not want advice. I just need to vent for a minute.")
         self.assertIn("vent", answer["reply"].lower())
