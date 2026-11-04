@@ -7,10 +7,11 @@ psychotherapy, diagnosis, crisis assessment, or clinical qualification.
 ## Open it
 
 1. Clone/download the TherapyBot repository or this development branch.
-2. Open `embedded/index.html` directly in a browser. Keep the six assets in
+2. Open `embedded/index.html` directly in a browser. Keep all seven assets in
    `manifest.json` together.
-3. Try a synthetic, ordinary reflection question. Nothing needs to be installed;
-   the browser runs the included JavaScript locally. An internet connection is
+3. Try a synthetic, ordinary reflection question. The bounded, in-memory
+   conversation adapter runs with the included JavaScript locally; no neural
+   provider is installed, no remote fallback exists. An internet connection is
    needed only if you deliberately open an external reference link.
 4. Optionally create your own Inner Council members using **Manage members**, then select **Convene** or type `Council:`, `Solo <name>:`, `Integrate:`, or `Containment:`. No members are assigned by default; replies remain limited scripted reflections, not multi-agent reasoning.
 5. Use **Clear chat** to discard the conversation while keeping the unsaved Council roster in this tab; **Forget all** (with confirmation), refresh, or close the tab to discard both.
@@ -34,7 +35,9 @@ python -m unittest tests.test_embedded_model -v
 python -m unittest discover -s tests -q
 node --check embedded/engine.js
 node --check embedded/council.js
+node --check embedded/conversation_adapter.js
 node --check embedded/ui.js
+node --test tests/test_conversation_adapter.cjs tests/test_adapter_dom_smoke.cjs
 node --check tests/browser_smoke.cjs
 ```
 
