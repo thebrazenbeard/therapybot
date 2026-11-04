@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; worker-src 'none'; img-src 'self' data:; font-src 'none'">
+  <title>TherapyBot · Browser Conversation Lab</title>
+  <link rel="stylesheet" href="./lab.css">
+  <script defer src="./runtime/catalog.js"></script>
+  <script defer src="./runtime/engine.js"></script>
+  <script defer src="./runtime/conversation_adapter.js"></script>
+  <script defer src="./lab.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <span class="eyebrow">THERAPYBOT / PRIVATE EXPERIMENT</span>
+      <h1>A conversation, here in your browser.</h1>
+      <p class="lead">This is a working <strong>rules-based conversation prototype</strong>, not a trained AI model, therapist, or medical service. Its replies can be repetitive or wrong.</p>
+      <p class="status" id="status" role="status">Preparing local conversation engine…</p>
+    </header>
+    <section class="panel" aria-labelledby="chat-heading">
+      <div class="chathead">
+        <h2 id="chat-heading">Conversation</h2>
+        <button id="clear" class="secondary" type="button">Clear this chat</button>
+      </div>
+      <div id="conversation-log" class="conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversation transcript"></div>
+      <form id="composer">
+        <label for="message">Your message</label>
+        <textarea id="message" name="message" rows="3" maxlength="8000" placeholder="What would you like to talk about?" required></textarea>
+        <div class="composerfoot"><small>Ctrl + Enter to send · No account or installation</small><button id="send" type="submit">Send</button></div>
+      </form>
+    </section>
+    <aside class="notice">
+      <h2>Important limits</h2>
+      <p>Nothing here has been clinically evaluated. This prototype does not diagnose, provide crisis support, or reliably recognize emergencies. Do not include secrets or identifying information.</p>
+      <p>If someone is in immediate danger, call your local emergency number. In the U.S., 988 offers crisis support and 911 handles emergencies.</p>
+      <p class="data-note">This page is built to work without network requests, telemetry, cloud inference, browser storage, or automatic model downloads. The chat exists only in this open page.</p>
+    </aside>
+  </main>
+</body>
+</html>
