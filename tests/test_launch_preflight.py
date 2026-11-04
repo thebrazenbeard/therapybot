@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@unittest.skipIf(os.name == "nt", "POSIX shell launcher is tested on Linux CI")
 class LinuxLauncherTests(unittest.TestCase):
     def _sandbox(self, base):
         root = Path(base)
