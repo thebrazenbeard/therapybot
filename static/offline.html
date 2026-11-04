@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>TherapyBot · Offline conversation</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color-scheme:dark;--bg:#0c1717;--panel:#162726;--panel2:#203633;--text:#eef5ed;--muted:#afcac3;--line:#405c55;--accent:#b8e1bb}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--text);background:radial-gradient(ellipse at 12% 0%,#31534b 0,transparent 52%),var(--bg)}
+    button,textarea,select{font:inherit}button{cursor:pointer}button:focus-visible,textarea:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #e3f4ae;outline-offset:3px}
+    .shell{display:grid;grid-template-columns:260px minmax(0,920px);justify-content:center;gap:26px;max-width:1240px;margin:auto;padding:36px 24px;min-height:100vh}
+    aside{padding:22px 18px;display:flex;flex-direction:column;gap:24px;background:#10201fc2;border:1px solid #2d4842;border-radius:22px}
+    .brand{display:flex;align-items:center;gap:13px;font-weight:760;font-size:23px}.logo{display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:var(--accent);color:#173129;font-size:27px}.brand small{display:block;color:var(--muted);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+    .side-card{border:1px solid var(--line);border-radius:14px;padding:15px;line-height:1.65;font-size:13px;color:var(--muted)}.side-card strong{color:#e1f1e6}.aside-end{margin-top:auto}.side-card p{margin:5px 0 0}.side-card a{color:var(--accent)}
+    main{display:flex;flex-direction:column;min-width:0}.eyebrow{text-transform:uppercase;color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.15em}.top{margin:3px 0 21px}h1{font-weight:640;letter-spacing:-.05em;font-size:clamp(30px,4.5vw,48px);margin:8px 0}.lead{color:var(--muted);line-height:1.55;max-width:660px;margin:0}
+    .badges{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}.badge{font-size:12px;border:1px solid var(--line);background:#213b35;color:#dbf1df;padding:8px 11px;border-radius:100px}
+    .chat-card{display:flex;flex-direction:column;flex:1;min-height:580px;background:linear-gradient(140deg,#1a302c,#122321);border:1px solid var(--line);border-radius:22px;box-shadow:0 20px 80px #0003;overflow:hidden}
+    .chat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line)}.chat-head strong{font-size:15px}.subhead{font-size:12px;color:var(--muted);margin-top:3px}
+    .conversation{display:flex;flex-direction:column;gap:15px;flex:1;overflow-y:auto;min-height:250px;max-height:57vh;padding:22px}
+    .empty{margin:auto;max-width:420px;text-align:center;line-height:1.6}.empty-icon{margin:auto auto 14px;display:grid;place-items:center;border:1px solid #577869;color:#d7ebda;border-radius:50%;font-size:33px;width:68px;height:68px}.empty h2{font-size:22px;font-weight:650;margin:0 0 6px}.empty p{color:var(--muted);margin:0}
+    .bubble{border:1px solid var(--line);border-radius:17px;padding:14px 17px;max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}.bubble.user{align-self:end;background:#2c5042}.bubble.guide{align-self:start;background:#1e3733}.speaker{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.11em;color:#bfd9c9;margin-bottom:6px}.citations{display:flex;gap:8px;flex-wrap:wrap;white-space:normal;border-top:1px solid #486659;margin-top:12px;padding-top:9px}.citations a{color:#d0eeda;border-radius:8px;padding:6px 9px;background:#294b3e;font-size:12px}.why{border-top:1px solid #486659;margin-top:12px;padding-top:9px;white-space:normal}.why summary{cursor:pointer;color:#c9e1d3;font-size:12px}.why p{color:var(--muted);font-size:12px;line-height:1.5;margin:8px 0 0}
+    .compose{padding:18px 22px 21px;border-top:1px solid var(--line)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row label{font-size:13px;color:var(--muted)}select,textarea{background:#0d201e;color:var(--text);border:1px solid #517268;border-radius:10px;padding:11px}textarea{width:100%;min-height:96px;resize:vertical;line-height:1.5;margin-top:12px}select{margin-left:6px}.actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}.note{font-size:12px;color:var(--muted);line-height:1.55}.button{border-radius:10px;padding:10px 15px;font-weight:700;border:1px solid #547b67;background:var(--accent);color:#123024}.button.secondary{background:#223d35;color:#e3f4e7}.button:disabled{opacity:.55;cursor:not-allowed}#feedback{min-height:22px;color:#d2e3d4;font-size:12px;margin-top:9px}
+    @media(max-width:800px){.shell{grid-template-columns:1fr;gap:16px;padding:13px}.shell aside{flex-direction:row;flex-wrap:wrap;padding:16px}.aside-end{margin-top:0}.side-card{flex:1 1 250px}.chat-card{min-height:530px}.conversation{max-height:54vh}}
+    @media(max-width:500px){.shell aside{gap:11px}.chat-head{padding:14px}.conversation{padding:13px}.compose{padding:13px}.bubble{max-width:99%}.actions .button{flex:1}.badges{gap:6px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside aria-label="Offline privacy and limits">
+      <div class="brand"><span class="logo" aria-hidden="true">✳</span><span>TherapyBot<small>Embedded offline edition</small></span></div>
+      <div class="side-card"><strong>Runs inside this page.</strong><p>No account, server, network connection, external model, or installation is needed for these bounded responses. The companion JavaScript file must stay alongside this HTML file.</p></div>
+      <div class="side-card"><strong>Not a trained language model.</strong><p>This experimental, unvalidated guide uses local rules, brief session context, and cited reference pointers. It is not an emergency service and cannot diagnose, provide psychotherapy, or replace professional care. It may misunderstand you or miss danger.</p></div>
+      <div class="side-card aside-end"><strong>Need urgent human help?</strong><p>For immediate danger, contact local emergency services. In the U.S., call or text <a href="https://988lifeline.org/get-help/" target="_blank" rel="noopener noreferrer">988</a> for crisis support. Opening that link leaves this local page.</p></div>
+    </aside>
+    <main>
+      <div class="top"><span class="eyebrow">A private space for thought</span><h1>Talk it through.</h1><p class="lead">Explore a concern, notice a pattern, or consider different interpretations. No questionnaire, and no requirement to turn every conversation into an exercise.</p><div class="badges"><span class="badge" id="engine-status" role="status" aria-live="polite">Checking bundled guide…</span><span class="badge">Conversation: memory only, never saved</span></div></div>
+      <section class="chat-card" aria-label="Offline conversation">
+        <div class="chat-head"><div><strong>Embedded guide</strong><div class="subhead">Deterministic, local reflection · Not clinical advice</div></div><button class="button secondary" id="clear" type="button">Clear session</button></div>
+        <div id="conversation" class="conversation" role="log" aria-label="Unsaved conversation" aria-live="polite"><div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">✧</div><h2>Where would you like to start?</h2><p>Try explaining something you've been thinking about. I can ask questions and point to sources, though my responses are limited.</p></div></div>
+        <form id="compose" class="compose"><div class="row"><label for="style">Style <select id="style"><option value="direct" selected>Direct</option><option value="gentle">Gentle</option><option value="reflective">Reflective</option></select></label><label for="depth">Depth <select id="depth"><option value="brief">Brief</option><option value="balanced" selected>Balanced</option><option value="deep">Detailed</option></select></label></div><label for="message" class="note">Your message</label><textarea id="message" maxlength="8000" required placeholder="Tell me what's on your mind…"></textarea><div class="actions"><span class="note">Nothing is uploaded or written to browser storage. Source links connect only when clicked.</span><button id="send" class="button" type="submit">Send ↗</button></div><div id="feedback" role="status" aria-live="polite"></div></form>
+      </section>
+    </main>
+  </div>
+  <script src="semantic_core.js"></script>
+  <script>
+    (()=>{
+      'use strict';
+      const el=id=>document.getElementById(id);
+      const core=window.TherapyBotSemanticCore;
+      let session=core&&typeof core.createSession==='function'?core.createSession():null;
+      el('engine-status').textContent=session?'Embedded guide ready · no model download':'Embedded guide asset missing';
+      const make=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=String(text);return node;};
+      const append=(speaker,text,citations=[],reason=null)=>{
+        el('empty')?.remove();
+        const bubble=make('article','bubble '+(speaker==='You'?'user':'guide'));
+        bubble.append(make('span','speaker',speaker),document.createTextNode(String(text)));
+        if(Array.isArray(citations)&&citations.length){
+          const refs=make('div','citations');
+          refs.append(make('span','note','Related reading — not verification of this individual reply:'));
+          for(const citation of citations.slice(0,5)){
+            try{const url=new URL(citation.url);if(url.protocol!=='https:')continue;
+              const link=make('a','',citation.title||url.hostname);link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';link.referrerPolicy='no-referrer';refs.append(link);
+            }catch(_){/* Invalid provenance URL: skip. */}
+          }
+          if(refs.querySelector('a'))bubble.append(refs);
+        }
+        if(reason){
+          const details=make('details','why');details.append(make('summary','','Why this response?'));
+          details.append(make('p','',`Rule-based ${reason.kind||'reflection'} using a bounded topic map. Related reading does not validate an individualized reply. ${reason.limitations||''}`));
+          bubble.append(details);
+        }
+        el('conversation').append(bubble);el('conversation').scrollTop=el('conversation').scrollHeight;
+      };
+      el('style').addEventListener('change',()=>{el('style').dataset.manual='true';});
+      el('depth').addEventListener('change',()=>{el('depth').dataset.manual='true';});
+      el('clear').addEventListener('click',()=>{
+        if(session)session.reset();el('style').value='direct';el('depth').value='balanced';delete el('style').dataset.manual;delete el('depth').dataset.manual;
+        el('conversation').replaceChildren(make('p','note','Session cleared. Nothing from this conversation was saved.'));
+        el('message').value='';el('feedback').textContent='';el('message').focus();
+      });
+      el('compose').addEventListener('submit',event=>{
+        event.preventDefault();const input=el('message').value.trim();if(!input)return;
+        if(!session){el('feedback').textContent='The bundled semantic_core.js file is unavailable. Keep it in the same folder as offline.html.';return;}
+        append('You',input);el('message').value='';
+        try{
+          const overrides={};
+          if(el('style').dataset.manual==='true')overrides.style=el('style').value;
+          if(el('depth').dataset.manual==='true')overrides.depth=el('depth').value;
+          const result=session.reply(input,overrides);
+          if(result.kind==='preference'){
+            const preferences=session.context().preferences;
+            if(preferences.style){el('style').value=preferences.style==='gentle'?'gentle':'direct';delete el('style').dataset.manual;}
+            if(preferences.depth){el('depth').value=preferences.depth==='deep'?'deep':'brief';delete el('depth').dataset.manual;}
+          }
+          append('Embedded guide',result.reply||'I do not have a useful response for that question.',result.citations||[],result);
+          el('feedback').textContent='Bounded offline guide · Session remains in this tab only';
+        }catch(_){append('System','The embedded guide could not process that message.');el('feedback').textContent='The guide encountered an error; no message was sent elsewhere.';}
+        el('message').focus();
+      });
+    })();
+  </script>
+</body>
+</html>

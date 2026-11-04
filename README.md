@@ -2,17 +2,25 @@
 
 **Status: development-only experimental local-first prototype — not a public interactive mental-health release, professional psychotherapy, medical treatment, a diagnosis tool, or an emergency service.**
 
-TherapyBot is a $0, offline-capable mental-health **support and education** application for Windows and Linux. It pairs a local GGUF model (KoboldCPP or llama.cpp-compatible endpoint) with optional passphrase-encrypted personal records, a local journal, and an inspectable, source-linked psychology/sociology reference register. There are no accounts, analytics, advertising IDs, cloud inference fallbacks, or subscription APIs.
+TherapyBot is a $0, offline-capable mental-health **support and education** prototype for Windows and Linux. A self-contained HTML/JavaScript **embedded guide** works without a separately installed language model or local server. The fuller local application optionally connects to a GGUF model (KoboldCPP or llama.cpp-compatible endpoint), and offers passphrase-encrypted personal records, a local journal, and an inspectable, source-linked psychology/sociology reference register. There are no accounts, analytics, advertising IDs, cloud inference fallbacks, or subscription APIs.
 
-**Web interface distinction:** The real local HTML chat runs only at `http://127.0.0.1:8768` after you start the app and a local model. The [GitHub Pages introduction](https://thebrazenbeard.github.io/therapybot/) links to a [read-only interface preview](https://thebrazenbeard.github.io/therapybot/interface-preview.html), the visual seed for a future richer local UI. Neither public page has chat submission, vault unlock, or model connection. The Pages workflow publishes only `pages/`, never the local-only `static/` interface, personal records, or repository root.
+**Web interface distinction:** Open `static/offline.html` directly from a local checkout for a browser-only, unsaved conversation; keep `static/semantic_core.js` alongside it. No Python, model daemon, CDN, internet, or account is required for that limited mode. The fuller HTML interface runs at `http://127.0.0.1:8768` after starting the Python application and offers a choice between the embedded guide and an optional local GGUF model. The [GitHub Pages introduction](https://thebrazenbeard.github.io/therapybot/) links to a [read-only interface preview](https://thebrazenbeard.github.io/therapybot/interface-preview.html). Neither public page has chat submission, vault unlock, or model connection. The Pages workflow publishes only `pages/`, never `static/`, personal records, or the repository root.
 
 **Release boundary:** The owner has withheld a general-public interactive release until the documented safety, model-output, privacy, accessibility, source-grounding, and record-compatibility failures are repaired and independently checked. Local development and testing may continue; the public Pages preview remains read-only. The [multi-team T’Kal-in-ket debate](docs/TKAL_HEARING_20261104.md) is an **open design review**, not a release authorization or clinical validation.
 
-> This software has not been clinically validated. Passing synthetic tests does not show that generated responses are safe or effective treatment. An LLM can give harmful, biased, or inaccurate advice. For immediate danger, contact emergency services; in the United States, you can call or text **988**.
+> This software has not been clinically validated. The embedded guide's rules can miss urgent dangers, overreact to language, repeat themselves, and give unsuitable prompts; they are **not a trained language model**. A separate LLM can also give harmful, biased, or inaccurate advice. Passing synthetic tests proves neither mode safe or effective as treatment. For immediate danger, contact emergency services; in the United States, you can call or text **988**.
+
+## Open the standalone offline HTML — no installation
+
+1. Download or clone this repository to your own computer.
+2. Open **`static/offline.html`** in a modern browser (double-clicking works). Keep the adjacent `static/semantic_core.js` file in the same directory.
+3. Type a message. The limited rule-based guide responds entirely in the browser. It retains a few topic and preference labels during the current tab's conversation, supports explicit corrections, and clears them with **Clear session**. It does **not** store raw messages or send them to the TherapyBot server. Nothing needs to be installed or configured.
+
+This mode offers a small, transparent semantic map with original reflection prompts and links to public sources. Its related reading does **not** establish that any individualized reply is clinically correct. It cannot offer open-ended generative reasoning or a genuine replacement for an LLM. **Do not use it to assess emergencies, make diagnoses, or decide medication.** External source links initiate a normal internet request only if clicked.
 
 ## Run locally
 
-Requirements: Python 3.10+ and a separately installed local inference server; Windows PowerShell or Linux shell. Download model weights separately (never into this repository). Python's `cryptography` package is required for local encrypted records.
+Requirements for the **fuller local vault/server experience**: Python 3.10+; Windows PowerShell or Linux shell. A separately installed local GGUF model server is needed **only for the Local GGUF mode**, not for the embedded guide. Download model weights separately (never into this repository). Python's `cryptography` package is required for encrypted records.
 
 ```sh
 python3 -m venv .venv
@@ -31,13 +39,14 @@ py -3 -m venv .venv
 
 Open `http://127.0.0.1:8768` in a browser on the same computer. Use `--no-browser` to prevent an automatic browser launch. Override the port with `--port`, or choose a database file with `--database`. Start your local model server first: supported URLs end in `/api/v1/generate` (KoboldCPP), `/completion` (llama.cpp), or `/v1/chat/completions` (OpenAI-compatible local server). For an OpenAI-compatible local endpoint, use `--model-name` with the installed model ID.
 
-If the model server is offline, ordinary chat returns an explicit error. TherapyBot **never** silently switches to an online service. Its static safety response remains available for high-risk text, but the classifier is rudimentary and cannot reliably detect all danger or interpret every negation.
+If the model server is offline, **Local GGUF mode** returns an explicit error; **Embedded guide mode** still works using bundled browser rules. TherapyBot **never** silently switches to an online service. Both modes have unvalidated safety handling and cannot reliably detect every dangerous situation or interpret every negation.
 
 One bounded synthetic runtime probe on VN2 verified the **actual TherapyBot HTTP → ModelClient → local llama.cpp GGUF** path using Granite 3.3 2B Q4_K_M (HTTP 200, approximately 11.6 seconds, no saved record). That does not qualify other models, clinical safety, Windows inference, or browser E2E behavior.
 
 ## Current capabilities
 
-- Local browser conversation, selectable style and response depth.
+- Standalone, browser-only `file://` conversation with bundled semantic rules, no backend and no persistent records; a bounded topic/preference context can be corrected and cleared.
+- Full local browser conversation with explicit embedded-vs-GGUF selection, style and response depth.
 - Optional saved conversation history; saving defaults **off**. No silent memory or training on user conversations.
 - Passphrase-encrypted SQLite journal and saved records, local search, encrypted SQLite backup, and record deletion. Unlocking is necessary before saving.
 - Local keyword retrieval over original evidence summaries with clickable external source references. Those references may help ground an answer; they are **not** automatic fact-checking of generated claims.
