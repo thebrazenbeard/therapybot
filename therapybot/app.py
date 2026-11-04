@@ -175,10 +175,11 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/status":
                 endpoint_reachable = self._model_ready()
                 with self.server.auth_lock:
-                    self._json({"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,
-                                "endpoint_reachable": endpoint_reachable, "ready": endpoint_reachable and self.server.model_responded,
-                                "model": self.server.model.url, "model_name": self.server.model.model_name, "source_count": len(sources()),
-                                "persistence_default": False, "local_only": True})
+                    status = {"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,
+                              "endpoint_reachable": endpoint_reachable, "ready": endpoint_reachable and self.server.model_responded,
+                              "model": self.server.model.url, "model_name": self.server.model.model_name, "source_count": len(sources()),
+                              "persistence_default": False, "local_only": True}
+                self._json(status)
             elif path == "/api/sources":
                 self._json({"sources": sources()})
             elif path == "/api/history":
@@ -186,18 +187,28 @@ class Handler(BaseHTTPRequestHandler):
                     if not self._authorized_session():
                         return
                     history = self.server.vault.list("chat")
-                    self._json({"messages": [{"id": r["id"], "created_at": r["created_at"], **r["content"]} for r in reversed(history)]})
+                    messages = [{"id": r["id"], "created_at": r["created_at"], **r["content"]} for r in reversed(history)]
+                # Authorization and plaintext snapshot are finalized together.
+                # Socket I/O must not hold the session mutex: multiple clients
+                # may stop reading and otherwise serialize write timeouts.
+                self._json({"messages": messages})
             elif path == "/api/journal":
                 with self.server.auth_lock:
                     if not self._authorized_session():
                         return
-                    self._json({"entries": self.server.vault.list("journal")})
+                    entries = self.server.vault.list("journal")
+                # Like an in-flight authorized backup, a prepared plaintext
+                # response may finish after a later lock operation. A lock
+                # invalidates future reads; it cannot recall bytes already
+                # prepared for an authorized request.
+                self._json({"entries": entries})
             elif path == "/api/search":
                 q = urllib.parse.parse_qs(parsed.query).get("q", [""])[0][:200]
                 with self.server.auth_lock:
                     if not self._authorized_session():
                         return
-                    self._json({"results": self.server.vault.search(q)})
+                    results = self.server.vault.search(q)
+                self._json({"results": results})
             elif path == "/api/backup":
                 with self.server.auth_lock:
                     if not self._authorized_mutation() or not self._authorized_session():
@@ -252,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     self.server.vault.lock()
                     self.server.session = None
-                    self._json({"storage": "locked"})
+                self._json({"storage": "locked"})
             elif self.path == "/api/chat":
                 msg = data.get("message")
                 if not isinstance(msg, str) or not msg.strip() or len(msg) > 8000:
@@ -306,7 +317,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not self._authorized_session():
                         return
                     rid = self.server.vault.add("journal", body, mood)
-                    self._json({"id": rid}, 201)
+                self._json({"id": rid}, 201)
             else:
                 self._error(404, "Not found")
         except ResponseDeliveryError:
@@ -329,7 +340,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if self.headers.get("X-TherapyBot-Confirm") != "DELETE":
                     return self._error(400, "Deletion requires explicit confirmation")
-                self._json({"deleted": self.server.vault.delete_all()})
+                deleted = self.server.vault.delete_all()
+            self._json({"deleted": deleted})
         except ResponseDeliveryError:
             return
         except VaultError as exc:
