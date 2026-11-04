@@ -185,8 +185,8 @@
     // a different present-tense disclosure later in the same message.
     const clauses = text.split(/(?<=[.!?;])\s+|\s*;\s*|\s*,?\s+but\s+|\s+and now\s+/);
     for (const clause of clauses) {
-      const fictional = /\b(?:fiction|fictional|novel|screenplay|book character|hypothetical|grammar example|song lyrics|nightmare)\b/.test(clause) ||
-        /\b(?:for (?:an? )?(?:english|grammar) (?:exercise|lesson|class)|quoted (?:an? )?(?:fictional|example|line|sentence))\b/.test(clause);
+      const quotedExample = /\b(?:for (?:an? )?(?:english|grammar) (?:exercise|lesson|class)|quoted (?:an? )?(?:fictional|example|line|sentence))\b/.test(clause);
+      const fictional = /\b(?:fiction|fictional|novel|screenplay|book character|hypothetical|grammar example|song lyrics|nightmare)\b/.test(clause) || quotedExample;
       if (historicalAndResolved && /\b(?:years ago|last year|in the past|used to)\b/.test(clause)) continue;
       const negatedIntent = /\b(?:do not|don't|never|not|won't|will not)\s+(?:plan|intend|want|going|about|hurt|kill)\b/.test(clause);
       const negatedConcern = /\b(?:not suicidal|not going to hurt|don't want to die|do not want to die|never want to die|never suicidal|not about suicide|don't intend to harm|do not intend to harm)\b/.test(clause);
@@ -206,6 +206,8 @@
       const currentWeaponThreat = /\b(?:my\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex|friend|roommate)|someone|he|she|they)\b.{0,80}\b(?:has|held|holding|put|pressed|pointed|aimed)\b.{0,35}\b(?:(?:a|the|his|her)\s+)?(?:knife|blade)\b.{0,35}\b(?:at|against|to|on)\s+my\s+(?:throat|neck)\b/.test(clause) &&
         /\b(?:right now|now|tonight|today|currently|at this moment)\b/.test(clause) &&
         !/\b(?:does not|doesn't|did not|didn't|never)\s+(?:have|hold|put|press|point|aim)\b/.test(clause);
+      const currentPassiveWeaponThreat = /\b(?:i am|i'm)\s+(?:(?:actually|currently)\s+)?being\s+(?:threatened|held|pinned)\b.{0,85}\b(?:knife|blade)\b.{0,45}\b(?:against|at|to|on)\s+my\s+(?:throat|neck)\b/.test(clause) &&
+        /\b(?:right now|now|today|tonight|currently|at this moment)\b/.test(clause);
       const thirdPersonImminentJump = /\b(?:my\s+)?(?:friend|daughter|son|child|partner|spouse|husband|wife|brother|sister|mother|father|roommate|he|she|they)\b.{0,55}\b(?:about to|going to|plans? to|intend(?:s)? to|will)\s+(?:jump|step)\s+(?:off|from)\s+(?:(?:a|the|this)\s+)?(?:parking garage|garage|bridge|roof|building|cliff|ledge)\b/.test(clause) &&
         !/\b(?:is|are|was|were|am)\s+not\s+(?:about to|going to)\b/.test(clause) &&
         !/\b(?:isn't|aren't|wasn't|weren't)\s+(?:about to|going to)\b/.test(clause);
@@ -241,13 +243,13 @@
       const spanishCurrentIntent = /\b(?:voy a quitarme la vida|me voy a suicidar|voy a matarme)\b/.test(clause) &&
         /\b(?:esta noche|ahora|hoy|ya|pronto)\b/.test(clause);
       const immediate = (acuteIngestion && !routineMedication) || (quantifiedMedication && !routineMedication) ||
-        acuteToxicIngestion || currentWeaponThreat || thirdPersonImminentJump || (thirdPersonUnresponsiveIngestion && !routineMedication) ||
+        acuteToxicIngestion || currentWeaponThreat || currentPassiveWeaponThreat || thirdPersonImminentJump || (thirdPersonUnresponsiveIngestion && !routineMedication) ||
         acuteOverdose || recentFistful || acuteBleeding || bandageSoaking || acuteBreathing || acuteInjury || weaponAtSelf || imminentJump ||
         atLedge || garageCarbonMonoxide || thirdPersonImminent || spanishCurrentIntent || (explicitCurrentIntent && !negatedIntent);
       // A fictional frame describes source context; it must not automatically
       // mask a subsequent direct disclosure. Ambiguous same-clause fiction is
       // clarified rather than treated as established live intent.
-      if (immediate && (!fictional || /\b(?:in real life|actually i|but now|right now i)\b/.test(clause))) return 'urgent_review';
+      if (immediate && (!fictional || (!quotedExample && /\b(?:in real life|actually i|but now|right now i)\b/.test(clause)))) return 'urgent_review';
       if (immediate && fictional) concern = true;
       if (!fictional && (frighteningHarmVoice || frighteningCommand || possibleOtherHarm || ominousObedience || selfErasure)) concern = true;
       if (!fictional && !negatedIntent && !negatedConcern && /\b(?:suicidal|suicide|self harm|self-harm|wish i were dead|want to die|hurt myself|hurt someone|kill myself)\b/.test(clause)) {
@@ -271,7 +273,10 @@
     // user's acute disclosure just because it lacks a repeated danger word.
     // Restrict carry-forward to explicit short followups and the last four
     // conversation turns: this is not a durable safety state or assessment.
-    const text = clean(message, 1000).trim();
+    // Council and other UI directives are routing prefixes, not user claims;
+    // normalize them before applying short followup continuity. The Council
+    // subsequently runs its own base safety veto with this same message.
+    const text = clean(message, 1000).trim().replace(/^(?:council|integrate|containment|solo\s+[^:]{1,64})\s*:\s*/, '');
     if (!/^(?:what (?:should|can|do) i do(?: now| next| about (?:it|that|this))?|what (?:now|next)|how (?:should|can|do) i (?:respond|proceed|handle|deal with) (?:this|that|it)|please help (?:me )?(?:now|with (?:this|that|it)))\b/.test(text)) return false;
     if (/\b(?:safe now|not real|didn't happen|did not happen|fiction|hypothetical|screenplay|false alarm)\b/.test(text)) return false;
     const recent = Array.isArray(history) ? history.slice(-4).reverse().find(function (item) {
