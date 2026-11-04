@@ -1,12 +1,14 @@
 # TherapyBot × T’Kal-in-ket — multi-team adversarial architecture review
 
-**Checkpoint:** 2026-11-04. **State:** OPEN / provisional REFINE position; not SUSTAIN, no clinical qualification, no general-public interactive release.
+**Checkpoint:** 2026-11-04. **State:** Team Member 01's frozen in-memory case reached `CLOSED / REFINE`; GitHub multi-team proceedings remain OPEN, BT2's separate Q01 remains PARTLY_ANSWERED, not SUSTAIN. No clinical qualification or general-public interactive release.
 
 ## Actual shared proceedings
 
 - [Team Member 01's frozen T’Kal-in-ket hearing #11](https://github.com/thebrazenbeard/t-kal-in-ket/issues/11): five actual native subagent opening comments and independent Chair process audit; three single-question, directed lens exchanges with respondent answers/concessions and an explicit challenger acknowledgment. Shared OpenAI provider/model family means these are separate native work assignments, **not** separately attested Lappy/VN1/VN2 model runs or professional clinical review.
 - [BT2's independently created hearing #12](https://github.com/thebrazenbeard/t-kal-in-ket/issues/12): separate ChatGPT native work and subagent positions, feature/main cross-branch tests, its own still-partly-answered Q01 and [draft source hearing PR #13](https://github.com/thebrazenbeard/t-kal-in-ket/pull/13). Team Member 01 made a [real cross-chat response](https://github.com/thebrazenbeard/t-kal-in-ket/issues/12#issuecomment-6633241748); [BT2 acknowledged it](https://github.com/thebrazenbeard/t-kal-in-ket/issues/12#issuecomment-6633306923).
 - [TherapyBot architecture issue #4](https://github.com/thebrazenbeard/therapybot/issues/4) holds implementation coordination; [issue #3](https://github.com/thebrazenbeard/therapybot/issues/3) preserves the backend/vault integration conflict. [T’Kal-in-ket issue #14](https://github.com/thebrazenbeard/t-kal-in-ket/issues/14) tracks a documented zero-attack waiver API absent from its source implementation.
+
+**Actual protocol execution:** [reproducible `tkik.core.Case` replay and exact comment receipts](https://github.com/thebrazenbeard/t-kal-in-ket/issues/11#issuecomment-6633468623). An independent procedure auditor tested pinned `tkik.core` (39/39 tests passed), registered three distinct native-subagent reviewer IDs, and replayed the sequential directed dispositions `CONCEDED`, `CONCEDED`, `ANSWERED` with matching defender identities and challenger acknowledgment. `Case.determine('REFINE', ...)` completed with exit code 0. The case digest and script hash are in that linked record. This verifies local source-code state-machine behavior, **not** independently authenticated hosts, providers, clinicians, or a durable trusted case ledger.
 
 **Frozen reviewed subject:** TherapyBot `main@6e0be42c7ff5115965584da015972cdc12092e0d`; T’Kal-in-ket `main@b0af150c2405b519fd921bac33e5f9f1f35f92d7`; alternate TherapyBot PR #1 `5c70bfc8ad535ee6bf62ff86770c0159020ceaa1` as captured in BT2's hearing. This document is a checkpoint, not proof that those are still live heads.
 
@@ -46,4 +48,4 @@ The [clinical methodological addendum](https://github.com/thebrazenbeard/t-kal-i
 
 The owner stated to BT2, as [quoted in the verified cross-chat hearing](https://github.com/thebrazenbeard/t-kal-in-ket/issues/12#issuecomment-6633306923), that the software **would not be for public release until those issues are resolved**. The BT2 Q01 remains **PARTLY_ANSWERED** pending specific future acceptance criteria; this document must not close that question on BT2's behalf.
 
-**Current determination:** preserve `REFINE`/OPEN, all failures and dissent, and no automatic implementation effect. A `SUSTAIN` claim would be inappropriate even if a local in-memory state machine accepted three self-declared reviewer IDs: no authenticated multi-provider quorum or clinical efficacy has been demonstrated.
+**Current determination:** Team Member 01's frozen in-memory case is `REFINE`, while the multi-team GitHub hearings remain open and BT2's separate question is only partly answered. Preserve all failures and dissent and allow no automatic implementation effect. A `SUSTAIN` claim would be inappropriate: no independently authenticated multi-provider quorum or clinical efficacy has been demonstrated.
