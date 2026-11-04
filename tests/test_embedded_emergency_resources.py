@@ -48,6 +48,15 @@ class EmergencyResourcePanelContract(unittest.TestCase):
         self.assertRegex(self.css, r'@media\s*\(max-width:\s*620px\)')
         self.assertIsNone(re.search(r'\b(?:fetch|XMLHttpRequest|sendBeacon)\s*\(', panel))
 
+    def test_emergency_cards_use_three_two_one_columns_at_responsive_breakpoints(self):
+        css = self.css
+        wide = css.split('@media (max-width: 1080px)', 1)[0]
+        tablet = css.split('@media (max-width: 1080px)', 1)[1].split('@media (max-width: 800px)', 1)[0]
+        phone = css.split('@media (max-width: 800px)', 1)[1].split('@media (max-width: 620px)', 1)[0]
+        self.assertRegex(wide, r'\.emergency-options\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)')
+        self.assertRegex(tablet, r'\.emergency-options\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)')
+        self.assertRegex(phone, r'\.emergency-options\s*\{[^}]*grid-template-columns:\s*1fr')
+
 
 if __name__ == "__main__":
     unittest.main()
