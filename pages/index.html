@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="TherapyBot: an experimental free, local-first mental-health support and education project for Windows and Linux.">
+  <meta name="referrer" content="no-referrer">
+  <title>TherapyBot — Think locally. Stay in control.</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1519;
+      --surface: #162327;
+      --surface-soft: #1d3030;
+      --line: #345052;
+      --text: #eff4ed;
+      --muted: #b2c5bf;
+      --accent: #b8dfb1;
+      --warm: #efd7a4;
+      font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.6; }
+    body::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: 780px; background:
+      radial-gradient(ellipse at 78% 23%, #305b4c92 0, transparent 38%),
+      radial-gradient(ellipse at 11% 0, #31494c9c 0, transparent 49%); pointer-events: none; }
+    a { color: inherit; text-decoration: none; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 3px; }
+    p { margin: 0 0 1rem; }
+    .wrap { width: min(1160px, calc(100% - 44px)); margin: 0 auto; }
+    .nav { padding: 28px 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 1.17rem; font-weight: 750; letter-spacing: -.025em; }
+    .brand-icon { width: 43px; height: 43px; border: 1px solid #b7d5bd60; border-radius: 14px; display: grid; place-items: center; background: #32594b; color: #d8f5d3; font-size: 25px; }
+    .nav-links { display: flex; gap: 28px; font-size: .9rem; color: var(--muted); font-weight: 600; }
+    .nav-links a:hover, .footer a:hover { color: var(--accent); }
+    .status { font-size: .74rem; letter-spacing: .15em; text-transform: uppercase; color: var(--accent); font-weight: 800; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr); gap: clamp(30px, 6vw, 88px); align-items: center; padding: 95px 0 64px; }
+    h1 { margin: 19px 0 24px; font-size: clamp(3.2rem, 6vw, 5.9rem); line-height: 1.04; letter-spacing: -.07em; font-weight: 760; max-width: 750px; }
+    h1 span { color: var(--accent); }
+    .lead { max-width: 610px; color: #ceddd3; font-size: clamp(1.03rem, 1.65vw, 1.18rem); line-height: 1.85; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 31px; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 12px; padding: 12px 21px; background: var(--accent); color: #10221c; font-weight: 750; }
+    .button.secondary { background: #223a39; color: #e8f4e6; border: 1px solid #4b6c62; }
+    .button:hover { filter: brightness(1.12); }
+    .diagram { min-height: 422px; border: 1px solid #47655b; border-radius: 30px; background: linear-gradient(145deg, #28443e, #142525 65%); padding: 29px; box-shadow: 0 45px 100px #0006, inset 0 1px #ffffff14; position: relative; overflow: hidden; }
+    .diagram::after { content: ""; width: 310px; height: 310px; position: absolute; right: -165px; top: -145px; border-radius: 50%; border: 70px solid #b8dfb114; }
+    .visual-title { display: flex; align-items: center; gap: 10px; color: #d4e8d9; font-size: .75rem; text-transform: uppercase; letter-spacing: .15em; font-weight: 700; }
+    .visual-title::before { content: ""; width: 8px; height: 8px; background: #b9e7b5; border-radius: 50%; box-shadow: 0 0 0 5px #b9e7b522; }
+    .local-core { width: 140px; height: 140px; margin: 37px auto 35px; border-radius: 50%; border: 1px solid #89ba9e; background: radial-gradient(circle, #649f7c, #315548 65%, #29433d); box-shadow: 0 0 0 21px #a3dfab10, 0 0 0 42px #a3dfab08; display: grid; place-items: center; font-size: 50px; color: #e3ffe0; }
+    .local-label { text-align: center; font-size: 1.3rem; font-weight: 720; letter-spacing: -.03em; margin-bottom: 8px; }
+    .local-sub { text-align: center; font-size: .86rem; color: #b6d0c3; }
+    .visual-path { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 26px; }
+    .visual-path span { border: 1px solid #56776b; padding: 10px 6px; text-align: center; border-radius: 9px; font-size: .75rem; font-weight: 700; color: #ddf0df; background: #1a322f; }
+    .notice { display: flex; gap: 17px; align-items: start; border: 1px solid #9c815e; border-radius: 16px; background: #3b332d70; padding: 19px 24px; margin: 14px 0 100px; }
+    .notice-mark { color: var(--warm); font-size: 1.5rem; line-height: 1; margin-top: 3px; }
+    .notice strong { color: #ffe9bb; }
+    .notice p { margin: 5px 0 0; color: #e6d9c6; font-size: .94rem; }
+    .section { padding: 20px 0 105px; }
+    .eyebrow { color: var(--accent); font-size: .75rem; letter-spacing: .16em; font-weight: 800; text-transform: uppercase; }
+    h2 { letter-spacing: -.05em; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.14; margin: 17px 0 20px; }
+    .section-intro { color: var(--muted); max-width: 660px; font-size: 1.02rem; }
+    .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 34px; }
+    .feature { padding: 29px; background: linear-gradient(160deg, #1b3030, #162426); border: 1px solid var(--line); border-radius: 20px; min-height: 230px; }
+    .feature .number { color: #b6ddaa; font-size: .85rem; font-weight: 800; letter-spacing: .12em; }
+    .feature h3 { font-size: 1.28rem; margin: 24px 0 8px; letter-spacing: -.025em; }
+    .feature p { color: #b9cec5; font-size: .94rem; line-height: 1.75; }
+    .steps { display: grid; gap: 15px; margin-top: 31px; }
+    .step { display: grid; grid-template-columns: 43px 1fr; gap: 17px; border-bottom: 1px solid var(--line); padding: 18px 0; }
+    .step-index { width: 43px; height: 43px; border-radius: 12px; background: #29493e; color: #cbe6c6; font-weight: 800; display: grid; place-items: center; }
+    .step h3 { margin: 0 0 5px; font-size: 1.07rem; }
+    .step p { color: var(--muted); margin: 0; max-width: 790px; }
+    .step a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+    .bottom { margin: 2px 0 50px; padding: 27px 29px; border-radius: 20px; border: 1px solid #47645d; background: #1c3130; display: flex; justify-content: space-between; gap: 26px; align-items: center; }
+    .bottom strong { display: block; font-size: 1.17rem; margin-bottom: 4px; }
+    .bottom p { margin: 0; color: var(--muted); max-width: 730px; font-size: .92rem; }
+    .footer { padding: 24px 0 43px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; font-size: .81rem; color: #a2bcb3; }
+    .footer a { text-decoration: underline; text-underline-offset: 3px; }
+    @media (max-width: 870px) { .hero { grid-template-columns: 1fr; padding-top: 65px; } .diagram { min-height: 400px; max-width: 500px; width: 100%; margin: auto; } .features { grid-template-columns: 1fr; } .feature { min-height: 0; } }
+    @media (max-width: 550px) { .wrap { width: min(100% - 30px, 1160px); } .nav-links { gap: 14px; font-size: .78rem; } .nav { padding: 19px 0; } .hero { padding-top: 42px; } h1 { font-size: 3.3rem; } .diagram { padding: 20px; } .notice { margin-bottom: 76px; } .section { padding-bottom: 76px; } .bottom { flex-direction: column; align-items: start; } }
+  </style>
+</head>
+<body>
+  <header class="nav wrap">
+    <a class="brand" href="#" aria-label="TherapyBot home"><span class="brand-icon" aria-hidden="true">✳</span> TherapyBot</a>
+    <nav class="nav-links" aria-label="Page navigation">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">Get started</a>
+      <a href="https://github.com/thebrazenbeard/therapybot">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <div class="status">Experimental · $0 · Windows & Linux</div>
+        <h1 id="hero-title">A little space <span>to think.</span></h1>
+        <p class="lead">TherapyBot is an experimental, local-first project for thoughtful AI-supported reflection, journaling, and evidence-linked mental-health education. You bring your own compatible model. Your conversations belong on your computer.</p>
+        <div class="buttons">
+          <a class="button" href="https://github.com/thebrazenbeard/therapybot#run-locally">View local setup ↗</a>
+          <a class="button secondary" href="https://github.com/thebrazenbeard/therapybot/pull/1">Explore HTML prototype ↗</a>
+        </div>
+      </div>
+      <div class="diagram" role="img" aria-label="Illustration of a local computer running AI, journal, and evidence-library components">
+        <div class="visual-title">Local-first architecture</div>
+        <div class="local-core" aria-hidden="true">✳</div>
+        <div class="local-label">Your computer</div>
+        <div class="local-sub">Local model · Local application</div>
+        <div class="visual-path" aria-hidden="true"><span>CONVERSATION</span><span>JOURNAL</span><span>REFERENCES</span></div>
+      </div>
+    </section>
+
+    <aside class="notice" aria-label="Privacy warning">
+      <span class="notice-mark" aria-hidden="true">!</span>
+      <div><strong>This is a public information page—not TherapyBot itself.</strong>
+        <p>Do not enter vault passphrases, private messages, trauma histories, medical records, or other sensitive information on this site. The working app must be installed and opened locally at 127.0.0.1. This website has no chat, login, forms, local model connection, or record storage.</p>
+      </div>
+    </aside>
+
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="eyebrow">What we're building</div>
+      <h2 id="features-title">Useful support.<br>On your terms.</h2>
+      <p class="section-intro">The software is designed to help you explore difficult questions without mandatory accounts or surveillance. It is an evolving prototype, not a clinical service.</p>
+      <div class="features">
+        <article class="feature"><span class="number">01 / CONVERSATION</span><h3>Talk things through</h3><p>Connect a compatible GGUF model running on your own Windows or Linux computer. Local inference is optional for journaling and reference browsing.</p></article>
+        <article class="feature"><span class="number">02 / LOCAL RECORDS</span><h3>Keep control</h3><p>Choose whether to save conversations. Keep journal entries in a passphrase-protected local vault, with local search and data-management controls.</p></article>
+        <article class="feature"><span class="number">03 / REFERENCE LIBRARY</span><h3>Check the sources</h3><p>Explore original summaries linked to clinical and public-health references. A citation helps you inspect a claim; it does not guarantee model accuracy.</p></article>
+      </div>
+    </section>
+
+    <section class="section" id="how-it-works" aria-labelledby="steps-title">
+      <div class="eyebrow">Run privately</div>
+      <h2 id="steps-title">The application runs locally.</h2>
+      <p class="section-intro">GitHub Pages cannot operate a private Python server or run a GGUF model. This public page is a starting point for installing the real application on your own machine.</p>
+      <div class="steps">
+        <div class="step"><span class="step-index">1</span><div><h3>Get the source</h3><p>Follow the current <a href="https://github.com/thebrazenbeard/therapybot#run-locally">Windows and Linux setup instructions</a>. The project is free to run but still experimental.</p></div></div>
+        <div class="step"><span class="step-index">2</span><div><h3>Configure your local model</h3><p>Install your own compatible GGUF runtime, such as KoboldCPP or llama.cpp. No commercial inference API or third-party account is required.</p></div></div>
+        <div class="step"><span class="step-index">3</span><div><h3>Open localhost, not this site</h3><p>Launch the Python app and open its loopback URL in your browser. Protect your passphrase and review the documentation's storage and model-safety limits.</p></div></div>
+      </div>
+    </section>
+
+    <aside class="bottom" aria-label="Health and safety limits">
+      <div><strong>A tool for reflection, not a therapist.</strong>
+        <p>TherapyBot is not clinically validated, does not diagnose or prescribe, and cannot provide emergency care. Its model and crisis detection can make serious mistakes. In the US, call or text 988 for crisis support; call emergency services for immediate danger.</p>
+      </div>
+      <a class="button secondary" href="https://988lifeline.org/get-help/">988 resources ↗</a>
+    </aside>
+  </main>
+
+  <footer class="footer wrap">
+    <span>TherapyBot · Experimental local-first project · No forms, analytics, or external scripts on this page</span>
+    <span><a href="https://github.com/thebrazenbeard/therapybot">Source & documentation</a></span>
+  </footer>
+</body>
+</html>

@@ -36,8 +36,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          # Public Pages is documentation only. Never publish the local vault
+          # UI or any application files that can solicit private records.
+          path: 'pages'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
