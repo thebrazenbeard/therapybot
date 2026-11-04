@@ -5,12 +5,13 @@ By default, nothing is written; --apply updates the source register atomically.
 """
 
 import argparse
+import ipaddress
 import json
 import os
 import re
 import tempfile
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,26 +23,62 @@ REQUIRED = (
 
 
 def _url_key(value):
-    parsed = urlsplit(value)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+    if not isinstance(value, str) or not value or any(character.isspace() or ord(character) < 32 for character in value):
+        raise ValueError("Source URL must be an HTTPS string without whitespace")
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname or ""
+        # Accessing .port also validates malformed ports and IPv6 brackets.
+        parsed.port
+    except ValueError as exc:
+        raise ValueError("Source URL has an invalid hostname or port") from exc
+    if parsed.scheme != "https" or not hostname or parsed.username is not None or parsed.password is not None:
         raise ValueError("Source URL must use HTTPS without credentials")
-    return value.rstrip("/").lower()
+    # DNS trailing-dot absolute names resolve to the same host; never permit
+    # localhost/private-address bypasses or duplicate citations via that form.
+    normalized_host = hostname.rstrip(".")
+    if not normalized_host or hostname.endswith(".."):
+        raise ValueError("Source URL has an invalid hostname")
+    if normalized_host == "localhost" or normalized_host.endswith((".localhost", ".local", ".internal")) or "." not in normalized_host:
+        raise ValueError("Source URL cannot reference a local hostname")
+    # Some URL stacks resolve dotted decimal with leading zeros, octal or
+    # hexadecimal parts as IP literals. Do not rely on ipaddress accepting all
+    # those spellings: metadata citations have no need for numeric-only hosts.
+    if all(re.fullmatch(r"(?:0x[0-9a-f]+|[0-9]+)", part, re.IGNORECASE)
+           for part in normalized_host.split(".")):
+        raise ValueError("Source URL cannot reference a numeric host alias")
+    try:
+        address = ipaddress.ip_address(normalized_host)
+    except ValueError:
+        pass
+    else:
+        if not address.is_global:
+            raise ValueError("Source URL cannot reference a non-public IP address")
+    netloc = f"[{normalized_host}]" if ":" in normalized_host else normalized_host
+    if parsed.port is not None:
+        netloc += f":{parsed.port}"
+    return urlunsplit(("https", netloc, parsed.path, parsed.query, parsed.fragment)).rstrip("/").lower()
 
 
 def _valid_record(source):
     if not isinstance(source, dict):
         raise ValueError("Source entry must be an object")
     for field in REQUIRED:
-        if not source.get(field):
-            raise ValueError(f"Source {source.get('id', '<unidentified>')}: missing {field}")
+        if field == "topics":
+            continue
+        value = source.get(field)
+        if not isinstance(value, str) or not value.strip() or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            raise ValueError(f"Source {source.get('id', '<unidentified>')}: invalid or missing {field}")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]+", source["id"]):
         raise ValueError(f"Invalid source ID: {source['id']!r}")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(source["retrieved"])):
         raise ValueError(f"Invalid retrieval date: {source['id']}")
-    if not isinstance(source["topics"], list) or not all(
-        isinstance(topic, str) and topic.strip() for topic in source["topics"]
+    if not isinstance(source["topics"], list) or not source["topics"] or not all(
+        isinstance(topic, str) and topic.strip() and not any(ord(c) < 32 for c in topic) for topic in source["topics"]
     ):
         raise ValueError(f"Invalid topic list: {source['id']}")
+    if "source_license" in source and not isinstance(source["source_license"], str):
+        raise ValueError(f"Invalid source_license field: {source['id']}")
     if source.get("source_content_included") is not False:
         raise ValueError(f"Copied third-party content not permitted: {source['id']}")
     if source.get("model_training_rights") != "not-cleared":

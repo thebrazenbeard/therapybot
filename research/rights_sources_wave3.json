@@ -1,0 +1,22 @@
+[
+  {
+    "id": "openstax-psychology2e-ai-policy-2026",
+    "title": "Psychology 2e — Preface, Citation/Attribution and AI-use permission notice",
+    "issuer": "OpenStax, Rice University",
+    "authors": "OpenStax, Rice University",
+    "date": "undated",
+    "publication_date_precision": "year-or-undated",
+    "retrieved": "2026-11-04",
+    "type": "publisher_rights_policy",
+    "url": "https://openstax.org/books/psychology-2e/pages/preface",
+    "topics": ["model_training_permissions", "copyright", "evidence_provenance"],
+    "summary": "OpenStax's current Psychology 2e web preface states a separate prior-written-permission requirement for ingesting this book into language models or generative-AI offerings, alongside its general CC BY-NC-SA notice.",
+    "limitations": "Applies to this specific edition and publisher notice. Earlier OpenStax PDF notices differ; this record is not a general interpretation of Creative Commons law, a publisher permission, or a model-training license.",
+    "rights": "Link and original policy summary only; no textbook content, figures or license grant included.",
+    "source_license": "CC BY-NC-SA 4.0 (current web notice; AI ingestion requires written permission)",
+    "model_training_rights": "not-cleared",
+    "source_content_included": false,
+    "verification_method": "Official OpenStax current web preface, Citation/Attribution paragraphs, retrieved and cross-checked on 2026-11-04",
+    "section_anchor": "Citation/Attribution: Reuse and redistribution of this content in digital or print format"
+  }
+]
