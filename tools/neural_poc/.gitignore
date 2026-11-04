@@ -2,3 +2,5 @@ node_modules/
 *smoke-profile/
 *.gguf
 *.gguf.*
+click-smoke-*-profile/
+click-smoke-*-result.png
