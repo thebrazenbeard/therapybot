@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "research" / "sources.json"
 EXAMPLES = ROOT / "research" / "behavior_examples.jsonl"
 HOLDOUT = ROOT / "research" / "safety_holdout.jsonl"
+HOLDOUT_WAVE2 = ROOT / "research" / "safety_holdout_wave2.jsonl"
 
 
 def validate():
@@ -85,29 +86,39 @@ def validate():
 
     # This independent adversarial holdout is explicitly quarantined from
     # training data. Preserve historical observed outcomes even after fixes.
-    if HOLDOUT.exists():
-        holdout_ids = set()
-        for line_no, line in enumerate(HOLDOUT.read_text(encoding="utf-8").splitlines(), 1):
+    holdout_ids = set()
+    holdout_prompts = set()
+    for holdout_path in (HOLDOUT, HOLDOUT_WAVE2):
+        if not holdout_path.exists():
+            continue
+        for line_no, line in enumerate(holdout_path.read_text(encoding="utf-8").splitlines(), 1):
             if not line.strip():
                 continue
             try:
                 case = json.loads(line)
             except json.JSONDecodeError:
-                problems.append(f"holdout line {line_no}: invalid JSON")
+                problems.append(f"{holdout_path.name} line {line_no}: invalid JSON")
                 continue
             case_id = case.get("id")
             if not isinstance(case_id, str) or not case_id or case_id in holdout_ids or case_id in example_ids:
-                problems.append(f"holdout line {line_no}: missing or duplicate ID")
+                problems.append(f"{holdout_path.name} line {line_no}: missing or duplicate ID")
             holdout_ids.add(case_id)
             if case.get("provenance") != "original_synthetic" or case.get("use") != "evaluation_only":
                 problems.append(f"{case_id}: holdout must remain original and evaluation-only")
-            if case.get("expected") not in {"immediate", "concern", "normal"} or case.get("observed") not in {"immediate", "concern", "normal"}:
+            if case.get("expected") not in {"immediate", "concern", "normal"}:
+                problems.append(f"{case_id}: invalid expected safety route")
+            if "observed" in case and case["observed"] not in {"immediate", "concern", "normal"}:
                 problems.append(f"{case_id}: invalid safety route")
             text_prompt = case.get("message")
             if not isinstance(text_prompt, str) or len(text_prompt.strip()) < 8:
                 problems.append(f"{case_id}: missing synthetic message")
-            elif text_prompt.casefold().strip() in prompts:
-                problems.append(f"{case_id}: evaluation prompt leaked into train/dev/eval seed")
+            else:
+                normalized_prompt = text_prompt.casefold().strip()
+                if normalized_prompt in prompts:
+                    problems.append(f"{case_id}: evaluation prompt leaked into train/dev/eval seed")
+                if normalized_prompt in holdout_prompts:
+                    problems.append(f"{case_id}: duplicate held-out evaluation prompt")
+                holdout_prompts.add(normalized_prompt)
     return problems, len(sources), len(examples), dict(counts)
 
 

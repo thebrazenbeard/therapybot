@@ -41,9 +41,9 @@ One bounded synthetic runtime probe on VN2 verified the **actual TherapyBot HTTP
 - Optional saved conversation history; saving defaults **off**. No silent memory or training on user conversations.
 - Passphrase-encrypted SQLite journal and saved records, local search, encrypted SQLite backup, and record deletion. Unlocking is necessary before saving.
 - Local keyword retrieval over original evidence summaries with clickable external source references. Those references may help ground an answer; they are **not** automatic fact-checking of generated claims.
-- Model-independent heuristic safeguards for direct danger disclosures and explanatory crisis resources.
+- Experimental heuristic handling for some direct danger disclosures and always-visible emergency-help guidance in the local HTML. The heuristic remains unreliable on independent adversarial language.
 - Loopback-only HTTP listener, Host/Origin checks, per-process request token for mutations, and disabled request logging.
-- Curated external scientific, clinical, sociological and philosophical source metadata: 32 researched entries, combined with built-in records to yield 33 distinct source URLs for local retrieval. `research/` also contains 30 original synthetic train/dev/eval examples (18/6/6). A separate **34-case adversarial safety holdout found 23 routing mismatches**, including urgent cases missed by the heuristic; it is evaluation-only, not training data. No model fine-tuning has occurred; source rights and clinical quality need separate review.
+- Curated external scientific, clinical, sociological and philosophical source metadata: **51 link-only research records**, combined with built-in records to yield **52 distinct source URLs** for local retrieval. The 2026-11-04 research expansion added nine clinical and ten sociology records after independent **partially confirmed** bibliographic audits. Neither audit approved model training, clinical accuracy of generated answers, nor permission to redistribute full sources. `research/` now contains **46 original synthetic train/dev/eval examples (30/10/6)**, including 16 new psychology/sociology dialogue candidates with a separate, partly confirmed content audit. Neither the existing 34-case holdout (**11/34 routes matched**) nor a fresh independent 36-case holdout (**14/36 routes matched**) shows reliable danger detection. These holdouts are quarantined from training; their scores are not comparable estimates. No model fine-tuning has occurred.
 
 ## Privacy and limits
 
@@ -63,6 +63,6 @@ python -m compileall -q therapybot
 python scripts/validate_research.py
 ```
 
-See `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`, `docs/RESEARCH_POLICY.md`, `docs/REVIEW_FINDINGS.md` and `research/` for currentness and source provenance. The exact checkpoint and tests belong in `docs/CHECKPOINT.md`.
+See `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`, `docs/RESEARCH_POLICY.md`, `docs/REVIEW_FINDINGS.md`, the independent `docs/WAVE2_*_AUDIT.md` reviews, and `research/` for currentness and provenance. The source-merge utility runs in dry-run mode by default: `python scripts/merge_research_sources.py <new-reviewed-batch.json>`; an explicit `--apply` is available only for batches **not already included** in the register. A successful merge is a structural check, not scientific validation or a license grant. The exact checkpoint and tests belong in `docs/CHECKPOINT.md`.
 
 The project seeks **evidence-informed support**, not automated psychotherapy, and does not claim HIPAA compliance or guaranteed confidentiality. No chargeable infrastructure should be introduced.

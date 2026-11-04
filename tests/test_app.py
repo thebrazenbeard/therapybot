@@ -82,6 +82,13 @@ class HttpTests(unittest.TestCase):
         self.assertEqual("safety", result["mode"])
         self.assertFalse(self.request("/api/status")[1]["ready"])
 
+    def test_locked_save_returns_vault_status_not_invalid_input(self):
+        # VaultError is a ValueError subtype; the specialized handler must
+        # run first so the UI sees a locked-vault error, not a bad-request one.
+        code, result = self.request("/api/chat", "POST", {"message": "Synthetic ordinary question", "save": True}, self.csrf)
+        self.assertEqual(423, code)
+        self.assertIn("Unlock your vault", result["error"])
+
     def test_forged_origin_or_host_denied(self):
         self.assertEqual(403, self.request("/api/status", headers={"Host": "attacker.invalid"})[0])
         self.assertEqual(403, self.request("/api/status", headers={"Origin": "https://attacker.invalid"})[0])

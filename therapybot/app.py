@@ -218,10 +218,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"id": rid}, 201)
             else:
                 self._error(404, "Not found")
-        except (ValueError, json.JSONDecodeError) as exc:
-            self._error(400, str(exc))
         except VaultError as exc:
             self._error(423, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._error(400, str(exc))
         except OSError:
             self._error(500, "Local operation failed")
 
