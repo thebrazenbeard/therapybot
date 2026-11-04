@@ -9,6 +9,13 @@ p{line-height:1.55}
 .eyebrow{color:#86d7c3;font-weight:750;font-size:.75rem;letter-spacing:.13em}
 .lead{max-width:670px;color:#b4c3d8}
 .status{font-size:.88rem;color:#93c8b5}
+.modelbox{margin-bottom:20px;padding:19px 22px;background:#14283c;border:1px solid #3c657e;border-radius:14px}
+.modelbox p{color:#bdd0e0;font-size:.9rem}
+.model-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.model-actions label{font-weight:500;max-width:100%;flex-basis:100%}
+.model-actions input{width:auto;margin-right:8px}
+#model-status{color:#9ddbc4;margin-bottom:0}
+.chat-actions{display:flex;flex-wrap:wrap;gap:7px}
 .panel{background:#15243a;border:1px solid #31506d;border-radius:18px;overflow:hidden;box-shadow:0 18px 65px #02060c88}
 .chathead{padding:17px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #31506d}
 .helpbar{margin:0;padding:10px 20px;background:#3a2c26;color:#f6dfbc;font-size:.82rem;border-bottom:1px solid #7a573e}

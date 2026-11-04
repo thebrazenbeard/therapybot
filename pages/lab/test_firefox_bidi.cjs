@@ -63,7 +63,7 @@ async function main(){
    throw Error('Expected '+expected+' chat messages');
   }
   await waitCount(1);
-  assert.equal(await evalJs("document.getElementById('status').textContent.includes('Ready')"),true);
+  assert.equal(await evalJs("document.getElementById('status').textContent.includes('Rules-only')"),true);
   assert.equal(await evalJs("document.activeElement.id"),'message');
   await keys('my boss refuses reimbursement'.split(''));
   await ctrlEnter();
@@ -100,7 +100,9 @@ async function main(){
   await ctrlEnter();
   await waitCount(5);
   const stop = await evalJs("document.querySelectorAll('.assistant-message')[2].textContent");
-  assert.ok(stop.includes('stop here'));
+  assert.ok(stop.includes('Replies paused'));
+  assert.equal(await evalJs("document.getElementById('pause').getAttribute('aria-pressed')"),'true');
+  assert.equal(await evalJs("document.getElementById('send').disabled"),true);
   const local=new URL(url).origin+'/';
   const outside=requests.filter(x=>!x.startsWith(local)&&!x.startsWith('data:'));
   assert.deepEqual(outside,[]);

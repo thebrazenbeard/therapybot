@@ -1,136 +1,214 @@
-/* Working rules-only laboratory conversation. No model, network, or persistence. */
+/* Experimental local conversation: rules default, opt-in neural only after consent. */
 (function () {
   'use strict';
-  const log = document.getElementById('conversation-log');
-  const form = document.getElementById('composer');
-  const field = document.getElementById('message');
-  const sendButton = document.getElementById('send');
-  const clearButton = document.getElementById('clear');
-  const status = document.getElementById('status');
-  let session = null;
-  let epoch = 0;
-  let busy = false;
+  const get = id => document.getElementById(id);
+  const log = get('conversation-log');
+  const form = get('composer'), field = get('message'), sendButton = get('send');
+  const clearButton = get('clear'), pauseButton = get('pause'), status = get('status');
+  const consent = get('model-consent'), modelLoad = get('model-load');
+  const modelCancel = get('model-cancel'), modelStatus = get('model-status');
+  let session = null, busy = false, paused = false, ticket = 0;
+  let transcript = [], acuteContext = false, modelAbort = null, modelLoading = false;
 
   function append(role, message, warning) {
-    const article = document.createElement('article');
-    article.className = 'message ' + (role === 'You' ? 'user-message' : 'assistant-message');
-    const heading = document.createElement('h3');
+    const item = document.createElement('article');
+    item.className = 'message ' + (role === 'You' ? 'user-message' : 'assistant-message');
+    const heading = document.createElement('h3'), paragraph = document.createElement('p');
     heading.textContent = role;
-    const paragraph = document.createElement('p');
     paragraph.textContent = message;
-    article.append(heading, paragraph);
+    item.append(heading, paragraph);
     if (warning) {
       const note = document.createElement('p');
       note.className = 'warning';
       note.textContent = warning;
-      article.appendChild(note);
+      item.appendChild(note);
     }
-    log.appendChild(article);
+    log.appendChild(item);
     log.scrollTop = log.scrollHeight;
   }
-
-  function setBusy(next) {
-    busy = next;
-    sendButton.disabled = next || !session;
-    sendButton.textContent = next ? 'Thinking…' : 'Send';
+  function remember(role, content) {
+    transcript.push({ role, content });
+    if (transcript.length > 24) transcript = transcript.slice(-24);
   }
-
-  function createSession() {
+  function say(message, warning) {
+    append('TherapyBot', message, warning);
+    remember('assistant', message);
+  }
+  function refresh() {
+    field.disabled = paused;
+    sendButton.disabled = !session || paused || busy;
+    sendButton.textContent = busy ? 'Thinking…' : 'Send';
+    pauseButton.textContent = paused ? 'Resume replies' : 'Pause replies';
+    pauseButton.setAttribute('aria-pressed', String(paused));
+    modelLoad.disabled = modelLoading || !consent.checked ||
+      Boolean(window.TherapyBotNeural?.isLoaded());
+    modelCancel.disabled = !modelAbort;
+    consent.disabled = modelLoading || Boolean(window.TherapyBotNeural?.isLoaded());
+    status.textContent = paused ? 'Replies paused. Resume explicitly to continue.' :
+      window.TherapyBotNeural?.isLoaded() ? 'On-device neural mode · Experimental and unqualified' :
+      'Rules-only local engine · No model loaded';
+  }
+  function init() {
     if (!window.TherapyBotEmbedded || !window.TherapyBotConversationAdapter) {
-      status.textContent = 'The local engine assets are missing; this lab cannot run.';
-      setBusy(false);
+      status.textContent = 'Missing browser runtime; cannot converse.';
       return;
     }
     session = window.TherapyBotConversationAdapter.createSession({
       providers: [{
-        id: 'embedded-semantic',
-        kind: 'bounded-semantic',
-        execution: 'browser-local',
-        respond: window.TherapyBotEmbedded.respond
+        id: 'embedded-semantic', kind: 'bounded-semantic', execution: 'browser-local',
+        respond: ({ message }) => window.TherapyBotEmbedded.respond({
+          message, history: transcript.slice(0,-1).map(item => ({...item}))
+        })
       }],
       defaultProviderId: 'embedded-semantic'
     });
-    status.textContent = 'Ready · Rules-only local engine · No cloud or model downloads';
-    setBusy(false);
+    refresh();
   }
-
-  function isExplicitDanger(message) {
+  function reset() {
+    ticket++;
+    session?.clear();
+    paused = false;
+    transcript = [];
+    acuteContext = false;
+    log.replaceChildren();
+    append('TherapyBot', 'Hello. This is a limited experiment; I can offer basic conversation, but not reliable therapy or emergency assessment. What is on your mind?');
+    refresh();
+    field.focus();
+  }
+  function pause() {
+    ticket++;
+    session?.clear();
+    paused = true;
+    say('Replies paused. A generation already running may finish in memory, but its reply will be discarded. Select Resume replies to continue.');
+    refresh();
+    pauseButton.focus();
+  }
+  function togglePause() {
+    if (!paused) { pause(); return; }
+    paused = false;
+    refresh();
+    field.focus();
+  }
+  function fictional(text) {
+    return /\b(?:in (?:my|a) (?:novel|story|script)|a fictional|the fictional|my character|a character|the character|in this roleplay|hypothetically|hypothetical example|for a play)\b/i.test(text);
+  }
+  function immediateDanger(text) {
     return [
       /\b(?:i(?:'m| am)|we(?:'re| are)|someone is)\s+(?:in\s+)?(?:immediate\s+)?danger\b/i,
-      /\b(?:about to|going to|will|might|may)\s+(?:hurt|kill|end|harm)\s+(?:myself|ourselves|someone|them|him|her)\b/i,
+      /\b(?:about to|going to|will|might|may|want to|plan to)\s+(?:hurt|kill|end|harm)\s+(?:myself|ourselves|someone|them|him|her)\b/i,
       /\b(?:i(?:'m| am| feel)\s+suicidal|i\s+(?:want|plan|intend|might|may)\s+to\s+(?:kill|hurt|harm)\s+myself|i\s+(?:want|plan|intend|might|may)\s+to\s+end\s+my\s+life)\b/i,
       /\b(?:i(?:'m| am)\s+not safe|someone\s+is\s+(?:threatening|attacking)\s+me)\b/i,
-      /\b(?:i(?:'ve| have)\s+(?:just\s+)?(?:taken|swallowed)\s+(?:a lot of\s+)?(?:pills|poison|medication))\b/i
-    ].some(pattern => pattern.test(message));
+      /\b(?:took|taken|swallowed|ingested|overdosed|poisoned|drank)\b.{0,70}\b(?:pills|poison|medication|substance|chemicals|overdose)\b/i,
+      /\b(?:not breathing|unresponsive|not responding|isn't responding|is not responding|won't wake|cannot wake|can't wake|unconscious|severe bleeding|bleeding heavily)\b/i
+    ].some(pattern => pattern.test(text));
   }
-
-  function limitedResponse(message) {
-    if (isExplicitDanger(message)) return 'This may be urgent, and I cannot assess your safety. If anyone could be harmed right now, please contact local emergency services immediately. In the U.S., call 911 for emergencies or 988 for crisis support. If you can, move away from immediate danger and contact a trusted person nearby.';
-    if (/^(?:please\s+)?(?:stop|pause|stop (?:talking|replying)|leave me alone|enough)[.!?\s]*$/i.test(message)) {
-      return 'Okay. I will stop here. I will not continue unless you send another message. You can clear this chat whenever you want.';
+  function continuation(text) {
+    return /\b(?:do it|doing it|right now|tonight|can't stop|cannot stop|don't have time|can't wait|no more time|ready now|already did|it's happening|it is happening)\b/i.test(text);
+  }
+  function isStop(text) {
+    return /^(?:please\s+)?(?:stop(?:\s+(?:now|talking|replying|asking|asking questions))?|pause(?:\s+(?:now|this|replies))?|leave me alone|enough|i need (?:to stop(?: now)?|a break)|let(?:'s| us) stop|do not reply|don't reply)[.!?\s]*$/i.test(text.trim()) ||
+      /^(?:can|could|would) (?:we|you) (?:please )?(?:stop|pause)(?: now| replying| asking)?[.!?\s]*$/i.test(text.trim());
+  }
+  function localRoute(text) {
+    if (isStop(text)) return { kind:'pause' };
+    if (/\b(?:i(?:'m| am) safe now|not in danger|this (?:is|was) hypothetical|this (?:is|was) fictional)\b/i.test(text)) acuteContext=false;
+    if (fictional(text)) {
+      return { reply:'I understand this as fictional or hypothetical. I cannot infer the real-world safety of anyone from a quote. We can discuss the scene, but this is a limited rules-based experiment.' };
     }
-    if (/\binner council\b/i.test(message)) {
-      return 'The Inner Council is not available in this limited browser experiment. This page has one rules-based responder, not multiple independent perspectives.';
+    if (immediateDanger(text) || (acuteContext && continuation(text))) {
+      acuteContext = true;
+      return { reply:'This could be urgent, and I cannot assess how safe anyone is. If someone might be harmed right now, contact local emergency services immediately. In the U.S., call 911 for emergencies or 988 for crisis support. If possible, move away from immediate danger and get help from a person nearby.' };
     }
-    if (/\b(?:that(?:'s| is) not what i meant|you misunderstood|you(?:'re| are) not listening|not what i said|i did(?:n't| not) say that)\b/i.test(message)) {
-      return 'I may have misunderstood. I have limited context tracking, so please tell me the part I got wrong in your own words.';
+    if (/\binner council\b/i.test(text)) {
+      return {reply:'The Inner Council is not implemented in this browser experiment. This page cannot provide genuinely independent conversational perspectives.'};
+    }
+    if (/\b(?:that(?:'s| is) not what i meant|you misunderstood|you(?:'re| are) not listening|not what i said|i did(?:n't| not) say that)\b/i.test(text)) {
+      return {reply:'I may have misunderstood. I can retain the conversation text in this open page, but this small engine may not interpret corrections. What should I understand differently?'};
     }
     return null;
   }
-
-  function reset() {
-    epoch += 1;
-    if (session) session.clear();
-    log.replaceChildren();
-    append('TherapyBot', 'Hello. I can try to help you untangle a thought or situation, but my replies come from a limited rules-based system. What is on your mind?');
-    setBusy(false);
-    field.focus();
-  }
-
-  form.addEventListener('submit', async function (event) {
+  form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!session || busy) return;
+    if (!session || paused || busy) return;
     const message = field.value.trim();
     if (!message) return;
     field.value = '';
     append('You', message);
-    const bounded = limitedResponse(message);
-    if (bounded !== null) {
-      append('TherapyBot', bounded);
+    remember('user', message);
+    const route = localRoute(message);
+    if (route?.kind === 'pause') {
+      pause();
       return;
     }
-    setBusy(true);
-    const current = epoch;
+    if (route?.reply) {
+      say(route.reply);
+      return;
+    }
+    busy = true;
+    const turn = ++ticket;
+    refresh();
     try {
-      const result = await session.turn({ message: message, mode: 'direct', timeoutMs: 15000 });
-      if (current !== epoch) return;
-      if (result && result.status === 'ok' && typeof result.reply === 'string') {
-        const caution = result.safety && ['urgent_review', 'immediate', 'unknown'].includes(result.safety.route)
-          ? 'This prototype cannot determine whether urgent help is needed. If someone is in immediate danger, call your local emergency number.'
-          : '';
-        append('TherapyBot', result.reply, caution);
+      if (window.TherapyBotNeural?.isLoaded()) {
+        const reply = await window.TherapyBotNeural.respond(transcript);
+        if (turn === ticket && !paused) say(reply, 'Experimental 135M model output. It has not been evaluated for accuracy or clinical safety.');
       } else {
-        append('TherapyBot', result && result.message ? result.message : 'I could not complete that turn. Please try again.');
+        const result = await session.turn({message,mode:'direct',timeoutMs:15000});
+        if (turn !== ticket || paused) return;
+        const reply = result?.status === 'ok' && typeof result.reply === 'string'
+          ? result.reply : result?.message || 'A local error interrupted this turn.';
+        say(reply);
       }
-    } catch (_) {
-      if (current === epoch) append('TherapyBot', 'An unexpected local error interrupted this turn.');
+    } catch (error) {
+      if (turn === ticket && !paused) say('Local inference failed. ' +
+        (error instanceof Error ? error.message : String(error)));
     } finally {
-      if (current === epoch) setBusy(false);
+      busy = false;
+      refresh();
     }
   });
-  field.addEventListener('keydown', function (event) {
+  clearButton.addEventListener('click', reset);
+  pauseButton.addEventListener('click', togglePause);
+  for (const [button, action] of [[clearButton,reset],[pauseButton,togglePause]]) {
+    button.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        action();
+      }
+    });
+  }
+  field.addEventListener('keydown', event => {
     if (event.key === 'Enter' && event.ctrlKey) {
       event.preventDefault();
       form.requestSubmit();
     }
   });
-  clearButton.addEventListener('click', reset);
-  clearButton.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      reset();
+  consent.addEventListener('change',refresh);
+  modelLoad.addEventListener('click', async () => {
+    if (!consent.checked || modelLoading || window.TherapyBotNeural?.isLoaded()) return;
+    if (!window.TherapyBotNeural) {
+      modelStatus.textContent = 'Neural module unavailable; rules-only conversation remains active.';
+      return;
+    }
+    modelAbort = new AbortController();
+    modelLoading = true;
+    refresh();
+    try {
+      await window.TherapyBotNeural.load({
+        signal:modelAbort.signal,
+        onStatus: text => {modelStatus.textContent=text;}
+      });
+    } catch(error) {
+      modelStatus.textContent = 'Model NOT LOADED: ' + (error instanceof Error ? error.message : String(error));
+    } finally {
+      modelAbort = null;
+      modelLoading = false;
+      refresh();
     }
   });
-  createSession();
+  modelCancel.addEventListener('click', () => {
+    modelAbort?.abort();
+    modelStatus.textContent = 'Cancel requested; already-started WASM load might continue.';
+  });
+  init();
   reset();
 })();

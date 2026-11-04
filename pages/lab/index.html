@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; worker-src 'none'; img-src 'self' data:; font-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self' blob: 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' https://huggingface.co https://us.aws.cdn.hf.co; worker-src 'self' blob:; img-src 'self' data:; font-src 'none'">
   <title>TherapyBot · Browser Conversation Lab</title>
   <link rel="stylesheet" href="./lab.css">
   <script defer src="./runtime/catalog.js"></script>
   <script defer src="./runtime/engine.js"></script>
   <script defer src="./runtime/conversation_adapter.js"></script>
   <script defer src="./lab.js"></script>
+  <script type="module" src="./neural.js"></script>
 </head>
 <body>
   <main class="shell">
@@ -20,10 +21,18 @@
       <p class="lead">This is a working <strong>rules-based conversation prototype</strong>, not a trained AI model, therapist, or medical service. Its replies can be repetitive or wrong.</p>
       <p class="status" id="status" role="status">Preparing local conversation engine…</p>
     </header>
+    <section class="modelbox" aria-labelledby="model-heading">
+      <h2 id="model-heading">Optional on-device experimental model</h2>
+      <p>Rules-only conversation is the default. You can separately opt into a 105 MB SmolLM2 135M instruction model (Apache-2.0 base) downloaded once from Hugging Face after your consent. Its replies are unqualified and may be incoherent or unsafe. No model weights are included in this page.</p>
+      <div class="model-actions"><label><input type="checkbox" id="model-consent"> I understand the 105 MB download, temporary memory load, and experimental limitations.</label>
+      <button type="button" id="model-load" disabled>Download and load model</button>
+      <button type="button" id="model-cancel" disabled>Cancel transfer</button></div>
+      <p id="model-status" role="status">Rules-only · Model not downloaded or loaded.</p>
+    </section>
     <section class="panel" aria-labelledby="chat-heading">
       <div class="chathead">
         <h2 id="chat-heading">Conversation</h2>
-        <button id="clear" class="secondary" type="button">Clear this chat</button>
+        <div class="chat-actions"><button id="pause" class="secondary" type="button" aria-pressed="false">Pause replies</button><button id="clear" class="secondary" type="button">Clear this chat</button></div>
       </div>
       <p class="helpbar"><strong>Immediate danger?</strong> Contact your local emergency services now. In the U.S., call 911 for emergencies or 988 for crisis support.</p>
       <div id="conversation-log" class="conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversation transcript"></div>
@@ -37,7 +46,7 @@
       <h2>Important limits</h2>
       <p>Nothing here has been clinically evaluated. This prototype does not diagnose, provide crisis support, or reliably recognize emergencies. Do not include secrets or identifying information.</p>
       <p>If someone is in immediate danger, call your local emergency number. In the U.S., 988 offers crisis support and 911 handles emergencies.</p>
-      <p class="data-note">After its static files load, this prototype processes messages locally; it does not send your conversation to a server or download model weights. It does not intentionally store a transcript between visits. Your browser may cache static page files; use Clear to erase this session's in-memory chat.</p>
+      <p class="data-note">Messages stay in this page's working memory and are not submitted to an inference API. Optional model download requires explicit consent and goes directly to the pinned model host. This application does not store transcripts or model weights persistently; browsers may cache static JavaScript/WASM files. Clear removes the in-memory conversation.</p>
     </aside>
   </main>
 </body>

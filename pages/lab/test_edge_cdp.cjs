@@ -62,7 +62,7 @@ try{
   await cdp('Runtime.enable');
   await cdp('Page.navigate',{url});
   await count(1);
-  assert.equal(await inspect("document.getElementById('status').textContent.includes('Ready')"),true);
+  assert.equal(await inspect("document.getElementById('status').textContent.includes('Rules-only')"),true);
   assert.equal(await inspect('document.activeElement.id'),'message');
   await cdp('Input.insertText',{text:'My supervisor will not reimburse gasoline for the work truck.'});
   await key('Enter',2);
@@ -94,7 +94,32 @@ try{
   await key('Enter',2);
   await count(5);
   const stop = await inspect("document.querySelectorAll('.assistant-message')[2].textContent");
-  assert.ok(stop.includes('stop here'));
+  assert.ok(stop.includes('Replies paused'));
+  assert.equal(await inspect("document.getElementById('pause').getAttribute('aria-pressed')"),'true');
+  assert.equal(await inspect("document.getElementById('send').disabled"),true);
+  await inspect("document.getElementById('clear').click()");
+  await count(1);
+  await cdp('Input.insertText',{text:'A character says I might harm myself in my novel.'});
+  await key('Enter',2);
+  await count(3);
+  const hypothetical = await inspect("document.querySelectorAll('.assistant-message')[1].textContent");
+  assert.ok(hypothetical.includes('fictional or hypothetical') && !hypothetical.includes('911'));
+  await inspect("document.getElementById('clear').click()");
+  await count(1);
+  await cdp('Input.insertText',{text:"my roommate took pills and isn't responding"});
+  await key('Enter',2);
+  await count(3);
+  const thirdParty = await inspect("document.querySelectorAll('.assistant-message')[1].textContent");
+  assert.ok(thirdParty.includes('emergency services'));
+  await cdp('Input.insertText',{text:'i might do it now'});
+  await key('Enter',2);
+  await count(5);
+  const contextual = await inspect("document.querySelectorAll('.assistant-message')[2].textContent");
+  assert.ok(contextual.includes('emergency services'));
+  await cdp('Input.insertText',{text:'i need to stop now'});
+  await key('Enter',2);
+  await count(7);
+  assert.equal(await inspect("document.getElementById('pause').getAttribute('aria-pressed')"), 'true');
   const localOrigin = new URL(url).origin + '/';
   const outside=requests.filter(x => !x.startsWith(localOrigin) && !x.startsWith('data:'));
   assert.deepEqual(outside,[],'Unexpected outbound page request');
@@ -106,7 +131,7 @@ try{
     browser:'Edge isolated CDP',url,requests,
     outsidePageRequests:outside.length,jsExceptions:exceptions.length,
     firstReplyLength:first.length,secondReplyLength:second.length,urgentReplyLength:urgent.length,stopReplyLength:stop.length,
-    assertions:['ready','textarea focus','Ctrl+Enter two user turns','answers distinct and not echo','Tab->Send','Space->Clear','focus restored','explicit danger help','stop honored','loopback-only requests']
+    assertions:['ready','textarea focus','Ctrl+Enter two user turns','answers distinct and not echo','Tab->Send','Space->Clear','focus restored','explicit danger help','stop honored','fictional framing','third-party acute support','risk-context continuation','natural stop','loopback-only requests']
   },null,2));
 }finally{
   ws.close();

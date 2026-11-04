@@ -1,32 +1,36 @@
-# TherapyBot experimental browser conversation lab
+# TherapyBot private browser conversation lab — source-only, release HOLD
 
-This is a **source-only, unshipped, rules-based** visitor interface. It is not an LLM, medically validated product, emergency response service, or production safety classifier. It should not be promoted to users in its present form. The conversation is interactive and uses the existing browser-local TherapyBot embedded semantic engine and adapter from PR #24.
+This is an **unreleased experiment**, not a therapist, crisis service, or qualified safety classifier. Rules-based conversation is the default. Only after the visitor explicitly checks a 105 MB consent box and clicks the model-load button does it attempt an experimental local neural model. No account, API key, or visitor installation is required for a hypothetical published static page. **Do not merge into the published Pages tree** until separate release approval; the current Pages workflow could publish the lab if merged.
 
-## Local preview
+## Reproducible isolated build
 
-From the repository root, run:
+From the repository root, stage the rules-only/default UI into a new empty directory outside Git:
 
-    python pages/lab/build_preview.py --out <new-empty-directory-outside-repo>
+    py -3 pages/lab/build_preview.py --out D:\temp\therapybot-lab-preview
 
-Then serve the staged directory on an isolated localhost-only HTTP server or use a browser with file access enabled. This command is for the **developer**, not future visitors. A future hosted static page would require no installation, account, API key, or user-run CLI.
+To include the exact self-hosted Wllama 3.8.1 dependencies, supply a local npm installation (no network access or npm install is performed by the builder):
 
-The output includes **only** the three lab UI files and three approved JavaScript runtime files. It deliberately excludes Python backend, datasets, personal information, vault files, neural models, and any other repository content. It creates no cache. No fetch, telemetry, browser persistence, or model download occurs. Opening the page alone makes no requests for remote weights or cloud inference.
+    py -3 pages/lab/build_preview.py --out D:\temp\therapybot-neural-preview --wllama-node-modules D:\path\tools\neural_poc\node_modules
 
-Run tests from anywhere:
+Then serve the staged directory with an isolated loopback-only HTTP server. A browser opening the page downloads its static assets from that server; **it does not download model weights on page load**. If the 4 pinned neural runtime assets are missing, a model-load click fails before a 105 MB transfer.
 
-    python -m unittest discover -s pages/lab -p test_preview.py -v
+The builder copies only four UI files, three approved browser runtime JavaScript files, and, when requested, four exact SHA-256-checked Wllama assets. It never includes GGUF weights, Python backend code, data/vault files, credentials, or private trauma history. The build directory must be empty; the script refuses overwriting existing contents.
+
+## Model provenance and privacy boundaries
+
+- **SmolLM2-135M-Instruct Q4_K_M:** pinned quantization revision `a6b7826ed969c3926a98359e39912af137b464cb` from QuantFactory. Exact file size **105,454,144 bytes** and SHA-256 `8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684`. Underlying [HuggingFaceTB/SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) is Apache-2.0; review quantizer provenance at [QuantFactory](https://huggingface.co/QuantFactory/SmolLM2-135M-Instruct-GGUF).
+- **Engine:** `@wllama/wllama@3.8.1` and `@wllama/wllama-compat@3.8.1`, MIT-licensed, from [ngxson/wllama](https://github.com/ngxson/wllama). The four staged ESM/WASM/worker files are pinned to exact local hashes in `build_preview.py`. Explicit compat asset paths prevent fallback to a runtime CDN.
+- **Opt-in transfer:** direct `fetch` with `cache:'no-store'`, exact byte count, exact SHA-256 before `loadModel([verified File])` with single-thread CPU settings. Do **not** substitute Wllama `loadModelFromUrl`: its default model manager can use persistent browser storage.
+- **Actual network:** page assets are fetched locally; a consented model download contacts Hugging Face and its CDN and discloses normal network metadata such as an IP address to those services. The model is held in browser memory. The application does not call CacheStorage/IndexedDB/localStorage to retain model weights or conversations, but the browser may cache its static JavaScript/WASM.
+- **CSP:** this page has a *meta* Content Security Policy for local scripts, WASM/worker, local requests and pinned Hugging Face/CDN network hosts. It is not a verified production HTTP security-header policy or proof of CORS success on a future Pages origin.
+
+## Tests and release gate
+
+    py -3 -m unittest discover -s pages/lab -p 'test_*.py' -v
     node pages/lab/test_browser_turn.cjs
+    node pages/lab/test_edge_cdp.cjs <edge-debug-port> <loopback-url>
+    node pages/lab/test_firefox_bidi.cjs <firefox-bidi-port> <loopback-url>
 
-The Node smoke executes two genuine local adapter turns and verifies transcript clearing; it does not replace browser compatibility or safety testing.
+Browser tests require independently started **isolated** Edge/Firefox debugging profiles. They use synthetic prompts, avoid model downloads, exercise keyboard submission, stop/pause, clear/focus, immediate-help routing, and record actual page network requests. The optional neural-click test intentionally makes a **105 MB external transfer** and must not run on resource-starved hardware or concurrently with other model tests. For offline/error tests, block the pinned external hosts and verify fail-closed behavior first.
 
-## Release / hostile-review gate
-
-- **Not published or merged:** the existing Pages workflow publishes the pages tree; do not merge this lab into a deployed branch before an explicit release decision. Source-only is not a privacy or behavior verification.
-- Test a real user-submitted turn in Chrome, Firefox, and a constrained mobile browser, plus blank, multi-turn, reset, malformed, unsafe, and hostile HTML input cases.
-- Screen for accessible keyboard navigation, screen reader transcript announcement, and viewport/scroll behavior.
-- The visible immediate-help banner and a narrow local phrase screen address some explicit warnings; they are **not a reliable crisis detector**. Existing independent tests found unacceptable urgent misses and poor conversational context. **Do not claim safe user deployment**; rerun genuinely blind holdouts after each change.
-- The lab explicitly acknowledges stop/pause instructions, corrections, and unavailable Inner Council rather than pretending they work through its limited semantic engine.
-- Any future neural option must be explicit opt-in after disclosure of first-use model download size, license, versioned Wllama runtime, memory footprint, and no-persistent-cache status. It must not silently replace this rules engine or imply clinical utility.
-- Verify source hashes, license notices, CSP network boundary, and real Chrome/Firefox WebAssembly behavior before changing the static Pages publish path.
-
-No keys, third-party tracking, analytics, accounts, local storage, remote inference, or browser model weights are part of this lab.
+**Hard limitations:** The deterministic urgent-help path is neither clinically validated nor comprehensive. It can miss dangerous indirect cases or misread hypothetical language; independent earlier holdouts found severe context failures. A 135M neural model proves only token generation, not conversational competence or therapy safety. Stop/pause discards eventual stale results; it may not immediately abort already-running WASM generation. Explicit source, browser tests, blinded reviews, and separate release authorization are required. **No public deployment, merge or clinical claim is authorized by this branch.**
