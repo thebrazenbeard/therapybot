@@ -12,6 +12,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "static" / "offline.html"
 CORE = ROOT / "static" / "semantic_core.js"
+# GitHub-hosted Windows runners can spend more than 10s starting a cold Node
+# process. Still fail if the bounded smoke does not finish within 30s.
+NODE_SMOKE_TIMEOUT_SECONDS = 30
 
 
 class OfflineHTMLContract(unittest.TestCase):
@@ -35,7 +38,7 @@ class OfflineHTMLContract(unittest.TestCase):
         completed = subprocess.run(
             ["node", str(ROOT / "tests" / "offline_html_smoke.js")],
             cwd=ROOT, text=True, encoding="utf-8", capture_output=True,
-            timeout=10, check=True,
+            timeout=NODE_SMOKE_TIMEOUT_SECONDS, check=True,
         )
         self.assertIn("PASS: offline DOM smoke", completed.stdout)
 
@@ -56,7 +59,7 @@ class OfflineHTMLContract(unittest.TestCase):
         )
         completed = subprocess.run(
             ["node", "-e", script], cwd=ROOT, text=True, encoding="utf-8",
-            capture_output=True, timeout=10, check=True,
+            capture_output=True, timeout=NODE_SMOKE_TIMEOUT_SECONDS, check=True,
         )
         answers = json.loads(completed.stdout)
         self.assertEqual(answers[0]["kind"], "crisis")
