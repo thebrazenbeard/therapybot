@@ -187,9 +187,23 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 context = data.get("context") if isinstance(data.get("context"), list) else []
                 safety = classify(msg, context)
-                citations = source_search(msg)
+                # Immediate-help text must remain available even if the local
+                # source register is damaged or missing. Topical source matches
+                # are optional reading, not required for crisis assistance.
+                citations = []
+                catalog_ready = True
+                if safety != "immediate":
+                    try:
+                        citations = source_search(msg)
+                    except (ValueError, OSError):
+                        catalog_ready = False
                 if safety == "immediate":
                     reply, mode = IMMEDIATE_RESPONSE, "safety"
+                elif not catalog_ready:
+                    if safety != "concern":
+                        self._error(503, "Local evidence catalog unavailable; no model request was sent.")
+                        return
+                    reply, mode = "Local evidence catalog unavailable. " + CONCERN_PREFIX.strip(), "safety"
                 else:
                     try:
                         reply = self.server.model.generate(msg, data.get("style", "direct"), data.get("depth", "balanced"), context, citations)

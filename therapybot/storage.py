@@ -8,6 +8,8 @@ import base64
 import json
 import os
 import sqlite3
+import stat
+import tempfile
 import threading
 from pathlib import Path
 
@@ -18,6 +20,13 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 class VaultError(ValueError):
     pass
+
+
+_BACKUP_MAGIC = b"TBBK-FERNET-1\x00"
+# Fernet expands payloads by about 4/3; leave room below the 512 MiB cap.
+_MAX_SQLITE_IMAGE_BYTES = 380 * 1024 * 1024
+_MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+_VALID_KINDS = frozenset(("chat", "journal", "profile", "safety_plan"))
 
 
 class Vault:
@@ -131,7 +140,6 @@ class Vault:
 
     def backup(self):
         """Return a consistent encrypted SQLite image. No decrypted content exported."""
-        import tempfile
         with self._lock:
             self._require_key()
             with tempfile.TemporaryDirectory() as tmp:
@@ -142,6 +150,181 @@ class Vault:
                 finally:
                     other.close()
                 return target.read_bytes()
+
+    def export_authenticated_backup(self, passphrase):
+        """Return a versioned, authenticated archive of this existing vault.
+
+        The caller must have unlocked the vault and demonstrate knowledge of
+        its *original* passphrase. The old raw-SQLite backup() contract is
+        intentionally preserved for existing API consumers.
+        """
+        with self._lock:
+            self._require_key()
+            salt_row = self.db.execute("SELECT value FROM meta WHERE name='salt'").fetchone()
+            check_row = self.db.execute("SELECT value FROM meta WHERE name='check'").fetchone()
+            if salt_row is None or check_row is None:
+                raise VaultError("Vault verification data is missing")
+            try:
+                source_key = self._derive(passphrase, salt_row[0])
+                if source_key.decrypt(check_row[0]) != b"therapybot-v1":
+                    raise VaultError("Wrong passphrase or damaged vault")
+            except InvalidToken as exc:
+                raise VaultError("Wrong passphrase or damaged vault") from exc
+            snapshot = self.backup()
+            if len(snapshot) > _MAX_SQLITE_IMAGE_BYTES:
+                raise VaultError("Vault is too large for this backup format")
+            archive_salt = os.urandom(16)
+            envelope = self._derive(passphrase, archive_salt).encrypt(snapshot)
+            return _BACKUP_MAGIC + archive_salt + envelope
+
+    @staticmethod
+    def _validate_restored_snapshot(snapshot, passphrase):
+        """Reject malformed, foreign-schema, or row-unauthenticated images.
+
+        Validation happens in a private temporary directory *before* opening
+        or creating the caller's requested destination. The database contains
+        ciphertext records, not decoded private conversation text.
+        """
+        with tempfile.TemporaryDirectory(prefix="therapybot-verify-") as folder:
+            probe = Path(folder) / "candidate.sqlite3"
+            probe.write_bytes(snapshot)
+            db = sqlite3.connect(str(probe), timeout=5)
+            try:
+                # Treat even a passphrase-authenticated backup as untrusted
+                # SQLite schema/content before issuing introspection queries.
+                db.execute("PRAGMA trusted_schema=OFF")
+                db.execute("PRAGMA query_only=ON")
+                if db.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+                    raise VaultError("Backup SQLite integrity check failed")
+                objects = db.execute("SELECT type,name FROM sqlite_master").fetchall()
+                if set(objects) != {
+                    ("table", "meta"), ("table", "records"),
+                    ("index", "sqlite_autoindex_meta_1"),
+                }:
+                    raise VaultError("Backup has an unexpected schema")
+                meta = [
+                    (row[1], row[2].upper(), row[3], row[4], row[5])
+                    for row in db.execute("PRAGMA table_info(meta)")
+                ]
+                records = [
+                    (row[1], row[2].upper(), row[3], row[4], row[5])
+                    for row in db.execute("PRAGMA table_info(records)")
+                ]
+                if meta != [
+                    ("name", "TEXT", 0, None, 1),
+                    ("value", "BLOB", 1, None, 0),
+                ]:
+                    raise VaultError("Backup metadata schema is incompatible")
+                if records != [
+                    ("id", "INTEGER", 0, None, 1),
+                    ("kind", "TEXT", 1, None, 0),
+                    ("created_at", "TEXT", 1, "strftime('%Y-%m-%dT%H:%M:%fZ','now')", 0),
+                    ("encrypted", "BLOB", 1, None, 0),
+                ]:
+                    raise VaultError("Backup record schema is incompatible")
+                salt_row = db.execute("SELECT value FROM meta WHERE name='salt'").fetchone()
+                check_row = db.execute("SELECT value FROM meta WHERE name='check'").fetchone()
+                if (
+                    salt_row is None or check_row is None
+                    or not isinstance(salt_row[0], bytes) or len(salt_row[0]) != 16
+                ):
+                    raise VaultError("Backup is missing original vault verification data")
+                key = Vault._derive(passphrase, salt_row[0])
+                try:
+                    if key.decrypt(check_row[0]) != b"therapybot-v1":
+                        raise VaultError("Wrong passphrase or damaged backup")
+                    for kind, encrypted in db.execute("SELECT kind,encrypted FROM records"):
+                        if kind not in _VALID_KINDS:
+                            raise VaultError("Backup contains an unsupported record type")
+                        item = json.loads(key.decrypt(encrypted))
+                        if not isinstance(item, dict) or set(item) != {"content", "mood"}:
+                            raise VaultError("Backup contains an invalid record")
+                except (InvalidToken, UnicodeDecodeError, TypeError, ValueError) as exc:
+                    raise VaultError("Backup records failed authentication") from exc
+            except sqlite3.DatabaseError as exc:
+                raise VaultError("Backup is not a valid TherapyBot SQLite vault") from exc
+            finally:
+                db.close()
+
+    @staticmethod
+    def restore_authenticated_backup(archive, destination, passphrase):
+        """Restore only into a new path; never replace or mutate a live vault.
+
+        No destination is created until the outer envelope, original vault
+        passphrase, every saved record, and the SQLite schema all validate.
+        """
+        if not isinstance(archive, bytes) or not archive.startswith(_BACKUP_MAGIC):
+            raise VaultError("Unrecognized authenticated TherapyBot backup")
+        if len(archive) > _MAX_ARCHIVE_BYTES:
+            raise VaultError("Backup archive is too large")
+        rest = archive[len(_BACKUP_MAGIC):]
+        if len(rest) < 17:
+            raise VaultError("Incomplete authenticated backup")
+        archive_salt, token = rest[:16], rest[16:]
+        try:
+            snapshot = Vault._derive(passphrase, archive_salt).decrypt(token)
+        except InvalidToken as exc:
+            raise VaultError("Wrong passphrase or damaged backup") from exc
+        if len(snapshot) > _MAX_SQLITE_IMAGE_BYTES:
+            raise VaultError("Backup image is too large")
+        Vault._validate_restored_snapshot(snapshot, passphrase)
+
+        dest = Path(destination).expanduser().absolute()
+        if os.path.lexists(str(dest)):
+            raise VaultError("Destination already exists; restore only creates a new vault")
+        parent = dest.parent
+        if not parent.is_dir():
+            raise VaultError("Destination parent directory must already exist")
+        if os.name != "nt":
+            if any(component.is_symlink() for component in (parent, *parent.parents)):
+                raise VaultError("Choose a restore directory without symlinked ancestors")
+            # Fail closed on group/world-writable parents; otherwise a local
+            # actor could race a newly restored private vault's pathname.
+            parent_mode = stat.S_IMODE(parent.stat().st_mode)
+            if parent_mode & 0o022:
+                raise VaultError("Choose a private, non-group-writable restore directory")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            fd = os.open(str(dest), flags, 0o600)
+        except FileExistsError as exc:
+            raise VaultError("Destination already exists; restore refused") from exc
+        except OSError as exc:
+            raise VaultError("Unable to create restore destination securely") from exc
+        created_identity = os.fstat(fd)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(snapshot)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException as exc:
+            try:
+                current = dest.lstat()
+                if (
+                    created_identity.st_ino
+                    and current.st_dev == created_identity.st_dev
+                    and current.st_ino == created_identity.st_ino
+                    and stat.S_ISREG(current.st_mode)
+                ):
+                    dest.unlink()
+            except OSError:
+                pass
+            if isinstance(exc, OSError):
+                raise VaultError("Restore write failed; inode-checked cleanup attempted") from exc
+            raise
+        if os.name != "nt" and hasattr(os, "O_DIRECTORY"):
+            try:
+                parent_fd = os.open(str(parent), os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(parent_fd)
+                finally:
+                    os.close(parent_fd)
+            except OSError as exc:
+                raise VaultError(
+                    "Restored file exists but parent directory durability could not be verified"
+                ) from exc
+        return dest.resolve()
 
     def close(self):
         with self._lock:
