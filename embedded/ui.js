@@ -42,6 +42,20 @@
   let nextMemberId = 1;
   let editingMemberId = null;
   let councilSelected = false;
+  // Track the reader's intent before a responsive reflow changes scrollHeight.
+  // Browsers do not reliably preserve bottom alignment on desktop-to-mobile
+  // resize, even when the latest reply was fully visible beforehand.
+  let followingLatest = true;
+  log.addEventListener('scroll', () => {
+    followingLatest = log.scrollHeight - log.clientHeight - log.scrollTop <= 40;
+  });
+  window.addEventListener('resize', () => {
+    if (!followingLatest) return;
+    window.requestAnimationFrame(() => {
+      // An explicit instant reposition avoids a smooth-scroll delay after reflow.
+      log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+    });
+  });
 
   const make = (tag, className, content) => {
     const el = document.createElement(tag);

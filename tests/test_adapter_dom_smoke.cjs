@@ -23,6 +23,9 @@ class FakeElement {
     this.dataset = {};
     this.attributes = {};
     this.textContent = '';
+    this.scrollTop = 0;
+    this.scrollHeight = 0;
+    this.clientHeight = 0;
     this.classList = { toggle() {}, add() {}, remove() {} };
   }
   set innerHTML(_value) { throw new Error('DOM HTML sink is prohibited'); }
@@ -33,6 +36,9 @@ class FakeElement {
   replaceChildren(...children) { this.children = [...children]; }
   remove() { this.document.elements.delete(this.id); }
   focus() { this.document.activeElement = this; }
+  scrollTo({ top }) {
+    this.scrollTop = Math.min(top, Math.max(0, this.scrollHeight - this.clientHeight));
+  }
   reset() {
     for (const field of ['member-name', 'member-role', 'member-notes']) {
       this.document.getElementById(field).value = '';
@@ -71,6 +77,10 @@ function createFakeDom() {
   const effects = [];
   const window = {
     document,
+    handlers: {},
+    addEventListener(name, callback) { (this.handlers[name] ||= []).push(callback); },
+    fire(name) { for (const action of this.handlers[name] || []) action(); },
+    requestAnimationFrame(callback) { callback(); },
     confirm: () => true,
     localStorage: { getItem() { effects.push('localStorage.get'); throw new Error('storage'); }, setItem() { effects.push('localStorage.set'); throw new Error('storage'); } },
     sessionStorage: { getItem() { effects.push('sessionStorage.get'); throw new Error('storage'); }, setItem() { effects.push('sessionStorage.set'); throw new Error('storage'); } },
@@ -130,4 +140,24 @@ test('actual UI creates user-authored Council, convenes, contains and forgets ev
   assert.match(document.getElementById('council-count').textContent, /No members defined/);
   assert.equal(log.children.length, 1);
   assert.deepEqual(effects, []);
+});
+
+test('responsive resize follows the latest reply only when reader was already at bottom', async () => {
+  const { document, window } = createFakeDom();
+  const log = document.getElementById('conversation-log');
+  log.scrollHeight = 1000;
+  log.clientHeight = 400;
+  log.scrollTop = 600;
+  await log.fire('scroll');
+  log.scrollHeight = 1300;
+  log.clientHeight = 240;
+  window.fire('resize');
+  assert.equal(log.scrollTop, 1060, 'a bottom-pinned reader must see the newest message after reflow');
+
+  log.scrollTop = 300;
+  await log.fire('scroll');
+  log.scrollHeight = 1600;
+  log.clientHeight = 240;
+  window.fire('resize');
+  assert.equal(log.scrollTop, 300, 'do not yank a reader who intentionally scrolled up');
 });
