@@ -124,6 +124,9 @@ class HttpPrivacyWave2Tests(unittest.TestCase):
         self.assertEqual(200, self.call("/api/backup", headers=session)[0])
 
     def test_save_requires_positive_opt_in_and_unlocked_session(self):
+        # Isolate persistence consent: the unqualified default reviewer holds
+        # all generated replies and never saves them.
+        self.server.output_reviewer = lambda **_kwargs: "allow"
         ordinary = {"message": "Explain what values mean in ACT", "save": False}
         self.assertEqual(200, self.call("/api/chat", method="POST", payload=ordinary, headers=self.csrf)[0])
         # Parent integration subsequently repaired the inherited ValueError

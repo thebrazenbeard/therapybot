@@ -12,6 +12,26 @@
   const MAX_HISTORY = 24;
   const MAX_MESSAGE = 8000;
   const MAX_REPLY = 12000;
+  const ROUTES = Object.freeze(['normal', 'concern', 'urgent_review', 'immediate', 'unknown']);
+  const PROVIDER_CONCERN = 'A configured provider flagged a possible concern, but its words and safety label have not been independently verified. If anyone is in immediate danger, contact local emergency services.';
+  const PROVIDER_URGENT = 'A configured provider flagged possible immediate danger, but I cannot assess urgency or intent. If anyone may be in immediate danger, contact local emergency services now. In the U.S., you can call or text 988 for crisis support.';
+  const PROVIDER_UNKNOWN = 'I cannot validate this provider\'s safety routing for this message. If someone may be in immediate danger, use local emergency services. This is not an assessment of safety.';
+  const OUTPUT_REVIEW_HOLD = 'I cannot independently review this optional engine\'s output in this build, so I will not display a generated answer.';
+
+  function validResidentResult(result) {
+    return result && typeof result === 'object' && typeof result.reply === 'string' &&
+      result.reply.trim() && result.safety && ROUTES.includes(result.safety.route);
+  }
+
+  function providerVeto(route) {
+    return {
+      reply: route === 'concern' ? PROVIDER_CONCERN :
+        route === 'urgent_review' || route === 'immediate' ? PROVIDER_URGENT : PROVIDER_UNKNOWN,
+      supportedTopic: false, sources: [], state: {},
+      uncertainty: 'The provider route is unverified; its supplied prose has been suppressed.',
+      safety: { route: ROUTES.includes(route) ? route : 'unknown', coverage: 'unvalidated' }
+    };
+  }
 
   function errorResult(status, reason) {
     return Object.freeze({ status, reason, reply: null });
@@ -77,6 +97,12 @@
     }
     const council = config.council && typeof config.council.respond === 'function' ? config.council : null;
     const outputGate = typeof config.outputGate === 'function' ? config.outputGate : null;
+    const bundledCouncil = council && root.TherapyBotCouncil &&
+      council.respond === root.TherapyBotCouncil.respond;
+    // Capture the bundled resident check before an optional provider is invoked.
+    // Same-realm JavaScript is NOT an authenticated sandbox.
+    const residentRespond = root.TherapyBotEmbedded && typeof root.TherapyBotEmbedded.respond === 'function'
+      ? root.TherapyBotEmbedded.respond : null;
     let history = [];
     let active = null;
     let sequence = 0;
@@ -111,17 +137,8 @@
       const providerId = input.providerId || defaultProviderId;
       const provider = registry.get(providerId);
       if (!provider) return errorResult('unavailable', 'Requested local engine is not installed; no cloud fallback exists.');
-      // No neural/Council composition has been implemented or qualified.
-      // Respect explicit mode choice rather than silently changing to direct.
-      if (provider.kind === 'in-browser-neural' && mode !== 'direct') {
-        return errorResult('unavailable', 'This neural adapter does not support Council mode; no silent direct-chat substitution.');
-      }
-      // A neural provider is disabled unless this experiment has an explicitly
-      // supplied output gate. A provided gate is not evidence of clinical safety.
-      if (provider.kind === 'in-browser-neural' && !outputGate) {
-        return errorResult('unavailable', 'Neural output gate is not configured; this prototype will not expose unreviewed generations.');
-      }
-      if (mode !== 'direct' && !council) return errorResult('unavailable', 'Inner Council adapter is not configured.');
+      // Provider/mode availability is checked after resident risk so an
+      // unavailable optional model cannot suppress an independently caught cue.
 
       const controller = new AbortController();
       const ticket = ++sequence;
@@ -148,7 +165,45 @@
       }
       timer = setTimeout(() => { abortReason = 'timed_out'; controller.abort(); }, timeoutMs);
       try {
-        const outcome = await cancellableStep(() => {
+        const residentOutcome = await cancellableStep(() => residentRespond
+          ? residentRespond({ message, history: cloneHistory(history) }) : null);
+        if (residentOutcome.aborted || ticket !== sequence || controller.signal.aborted) {
+          return errorResult(abortReason, 'Turn canceled or timed out. No transcript entry was retained.');
+        }
+        if (residentOutcome.failed || !validResidentResult(residentOutcome.value)) {
+          return errorResult('unavailable', 'The resident safety check is unavailable or malformed; optional provider output was not displayed.');
+        }
+        const resident = residentOutcome.value;
+        const residentRoute = resident.safety.route;
+        const residentVeto = residentRoute !== 'normal';
+        // Provider-supplied `kind` is self-attested, not a trust credential.
+        // Only the identical bundled resident function is exempt from optional
+        // output review. Other bounded providers are as untrusted as neural ones.
+        const bundledResidentProvider = provider.kind === 'bounded-semantic' &&
+          residentRespond && provider.respond === residentRespond;
+        const needsOutputReview = !bundledResidentProvider;
+        const needsCouncilReview = mode !== 'direct' && council && !bundledCouncil;
+        if (!residentVeto) {
+          if (provider.kind === 'in-browser-neural' && mode !== 'direct') {
+            return errorResult('unavailable', 'This neural adapter does not support Council mode; no silent direct-chat substitution.');
+          }
+          if ((needsOutputReview || needsCouncilReview) && !outputGate) {
+            return Object.freeze({
+              status: 'ok', reply: OUTPUT_REVIEW_HOLD, providerId, kind: provider.kind,
+              responseOrigin: 'output-review-hold', modeApplied: 'direct',
+              safety: Object.freeze({ route: 'unknown', qualification: 'unvalidated' }),
+              clinicalQualification: 'none', outputGateQualification: 'not-configured',
+              providerNetworkVerified: false, providerStorageVerified: false,
+              sourceClaimsVerified: false, sourceIds: Object.freeze([]),
+              sourceRelation: 'background-reading-not-reply-verification',
+              presentation: presentationFrom({ reply: OUTPUT_REVIEW_HOLD })
+            });
+          }
+          if (mode !== 'direct' && !council) {
+            return errorResult('unavailable', 'Inner Council adapter is not configured.');
+          }
+        }
+        const outcome = residentVeto ? { value: resident } : await cancellableStep(() => {
           if (controller.signal.aborted) return { aborted: true };
           return provider.respond({
             message, history: cloneHistory(history), signal: controller.signal,
@@ -163,13 +218,16 @@
         if (!raw || typeof raw !== 'object' || typeof raw.reply !== 'string' || !raw.reply.trim()) {
           return errorResult('error', 'Local engine returned an invalid reply.');
         }
-        let result = raw;
-        // A neural model's self-reported safety label is never treated as a
-        // classifier result. In this prototype it remains unknown.
-        const route = provider.kind === 'in-browser-neural' ? 'unknown' :
-          raw.safety && ['normal', 'concern', 'urgent_review', 'immediate'].includes(raw.safety.route)
+        // Resident non-normal routes veto provider before invocation. A neural
+        // label is always unknown; a bounded provider's non-normal label can
+        // raise caution but cannot inject prose into its safety response.
+        const route = residentVeto ? residentRoute :
+          provider.kind === 'in-browser-neural' ? 'unknown' :
+          raw.safety && ROUTES.includes(raw.safety.route)
             ? raw.safety.route : 'unknown';
-        if (provider.kind === 'in-browser-neural') {
+        let result = !residentVeto && provider.kind === 'bounded-semantic' && route !== 'normal'
+          ? providerVeto(route) : raw;
+        if (!residentVeto && needsOutputReview && result === raw) {
           const gateOutcome = await cancellableStep(() => outputGate({
             message, candidateReply: raw.reply, providerId, history: cloneHistory(history),
             signal: controller.signal
@@ -197,6 +255,20 @@
           if (!result || typeof result.reply !== 'string' || !result.reply.trim()) {
             return errorResult('error', 'Council returned an invalid reflection.');
           }
+          // An injected Council is also a pluggable output source, even if it
+          // receives a bundled resident result. Review its final prose too.
+          if (needsCouncilReview) {
+            const gateOutcome = await cancellableStep(() => outputGate({
+              message, candidateReply: result.reply, providerId,
+              history: cloneHistory(history), stage: 'council', signal: controller.signal
+            }));
+            if (gateOutcome.aborted || ticket !== sequence || controller.signal.aborted) {
+              return errorResult(abortReason, 'Turn canceled while Council output was being reviewed.');
+            }
+            if (gateOutcome.failed || !gateOutcome.value || gateOutcome.value.allow !== true) {
+              return errorResult('suppressed', 'The experimental output gate did not approve Council output.');
+            }
+          }
         }
         const reply = result.reply.slice(0, MAX_REPLY);
         const sources = sourcePointers(result);
@@ -206,15 +278,19 @@
         const finalRoute = result === raw ? route :
           result.safety && ['normal', 'concern', 'urgent_review', 'immediate', 'unknown'].includes(result.safety.route)
             ? result.safety.route : 'unknown';
+        const responseOrigin = residentVeto ? 'resident-safety' :
+          result !== raw && route !== 'normal' ? 'provider-warning-veto' :
+          result !== raw ? 'inner-council' : 'selected-provider';
         const response = Object.freeze({
           status: 'ok', reply, providerId, kind: provider.kind,
+          responseOrigin,
           modeApplied: presentation.councilMode || 'direct',
           safety: Object.freeze({ route: finalRoute, qualification: 'unvalidated' }),
           presentation,
           sourceIds: Object.freeze(sources),
           sourceRelation: 'background-reading-not-reply-verification',
           clinicalQualification: 'none',
-          outputGateQualification: provider.kind === 'in-browser-neural' ? 'unspecified-experimental' : 'not-applicable',
+          outputGateQualification: needsOutputReview || needsCouncilReview ? 'unspecified-experimental' : 'not-applicable',
           providerNetworkVerified: false,
           providerStorageVerified: false,
           sourceClaimsVerified: false

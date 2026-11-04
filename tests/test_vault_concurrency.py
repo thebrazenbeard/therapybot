@@ -291,6 +291,8 @@ class VaultConcurrencyTests(unittest.TestCase):
         self.assertEqual(200, self.request("GET", "/api/history", session=second["session"])[0])
 
     def test_stale_saved_chat_cannot_cross_session_rotation(self):
+        # Explicit developer reviewer activates generation for this race probe.
+        self.server.output_reviewer = lambda **_kwargs: "allow"
         generation_started = threading.Event()
         resume_generation = threading.Event()
 
