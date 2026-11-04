@@ -45,7 +45,7 @@
 
         <div class="sidebar-block privacy-block">
           <div class="sidebar-heading"><span class="sidebar-icon" aria-hidden="true">02</span> Your privacy</div>
-          <p>No telemetry, network requests, local storage, cookies, or saved transcripts. Conversation history exists only in this open tab and disappears when you close or refresh it.</p>
+          <p>No telemetry or conversation uploads. The page loads its own app files; messages and Council profiles stay in page memory, with no app-managed persistent storage. Use Forget all to erase them before leaving.</p>
           <p class="small-note">Source links open external websites only if you choose to click them.</p>
         </div>
 
@@ -125,6 +125,7 @@
           </div>
 
           <div class="composer">
+            <noscript><p class="noscript-notice">This experimental conversation needs JavaScript. With scripts off, Send and Council controls do not operate or submit your text.</p></noscript>
             <div id="conversation-form" role="group" aria-label="Conversation composer">
               <label class="field-label" for="message">Your message</label>
               <textarea id="message" rows="3" maxlength="4000" placeholder="What would you like to untangle?" aria-describedby="message-hint" required></textarea>

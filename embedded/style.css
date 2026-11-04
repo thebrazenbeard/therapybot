@@ -20,7 +20,7 @@ button, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .56; }
 a { color: var(--mint); }
-button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #d3f4ae; outline-offset: 3px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #d3f4ae; outline-offset: 3px; }
 .skip-link { position: absolute; left: 12px; top: -80px; padding: 10px 16px; background: var(--mint); color: var(--mint-dark); border-radius: 7px; z-index: 10; }
 .skip-link:focus { top: 12px; }
 .site-frame { max-width: var(--max); margin-inline: auto; min-height: 100vh; }
@@ -133,6 +133,7 @@ h1 em { color: var(--mint); font-style: normal; }
 .message-sources a { font-size: 11px; color: #ccebd0; border: 1px solid #4b685b; padding: 5px 8px; border-radius: 7px; text-decoration: none; overflow-wrap: anywhere; }
 .message-sources a:hover { border-color: #aec8b7; text-decoration: underline; }
 .composer { border-top: 1px solid var(--line); background: #182723; padding: 21px 24px 18px; }
+.noscript-notice { color: #f0dfc3; font-size: 13px; line-height: 1.5; }
 .field-label { color: #d8e9d8; display: block; font-size: 12px; font-weight: 680; margin-bottom: 9px; }
 #message { width: 100%; min-height: 95px; max-height: 260px; resize: vertical; background: #101c19; border: 1px solid #506d5e; border-radius: 11px; color: var(--text); font-size: 14px; line-height: 1.55; padding: 13px 15px; }
 #message::placeholder { color: #899d91; }

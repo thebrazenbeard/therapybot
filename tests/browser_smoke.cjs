@@ -131,6 +131,7 @@ async function send(page, message) {
       reply: latest?.querySelector('.message-content, .council-speakers, .council-facilitator')?.textContent?.trim() || '',
       text: latest?.innerText || '',
       speakers: [...(latest?.querySelectorAll('.council-speaker-name') || [])].map((element) => element.textContent),
+      userLabels: [...(latest?.querySelectorAll('.council-speaker-user-label') || [])].map((element) => element.textContent),
       meta: latest?.querySelector('.message-meta')?.textContent || '',
       feedback: document.querySelector('#form-feedback')?.textContent || '',
       warning: latest?.classList.contains('message--warning') || false,
@@ -259,23 +260,45 @@ async function run() {
       }
     });
 
+    await test('Without JavaScript, Send cannot submit conversation text or navigate', async () => {
+      const disabled = await browser.newPage();
+      try {
+        await disabled.setJavaScriptEnabled(false);
+        await disabled.goto(origin + '/', { waitUntil: 'load', timeout: 20000 });
+        await disabled.type('#message', 'SyntheticPrivateConversationDoNotTransmit');
+        assert.equal(await disabled.$eval('.noscript-notice', (element) => getComputedStyle(element).display !== 'none'), true);
+        const navigations = [];
+        disabled.on('request', (request) => {
+          if (request.isNavigationRequest()) navigations.push(request.url());
+        });
+        const navigation = disabled.waitForNavigation({ timeout: 1200 }).then(() => true, () => false);
+        await disabled.click('#send-message');
+        assert.equal(await navigation, false, 'A disabled-script composer must not submit a native request');
+        assert.equal(disabled.url(), origin + '/');
+        assert.deepEqual(navigations, []);
+      } finally {
+        await disabled.close();
+      }
+    });
+
     await test('Convene and conduct a live two-turn Council exchange', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#convene-council', (element) => element.getAttribute('aria-pressed')), 'true');
       assert.equal(await page.$eval('#council-setup', (element) => element.hidden), true,
         'The editor must collapse so conversation can take priority.');
       const first = await send(page, 'I want to set a clear boundary with a colleague. What am I overlooking?');
-      assert.deepEqual(first.speakers, ['Strategist', 'Guardian']);
+      assert.deepEqual(first.speakers, ['Perspective 1', 'Perspective 2']);
+      assert.deepEqual(first.userLabels, ['Your label: Strategist', 'Your label: Guardian']);
       assert.match(first.text, /not evidence of separate people or diagnoses/i);
       const second = await send(page, 'If I speak plainly but calmly, what would each perspective want me to remember?');
-      assert.deepEqual(second.speakers, ['Strategist', 'Guardian']);
+      assert.deepEqual(second.speakers, ['Perspective 1', 'Perspective 2']);
       assert.equal(await count(page, '.message--user'), 2);
       await screenshot(page, artifactDir, '02-council-conversation.png');
     });
 
     await test('Typed Solo command addresses only a configured member', async () => {
       const answer = await send(page, 'Solo Strategist: What is the next practical question to ask?');
-      assert.deepEqual(answer.speakers, ['Strategist']);
+      assert.deepEqual(answer.speakers, ['Perspective 1']);
       assert.match(answer.text, /user-defined lens/i);
     });
 
