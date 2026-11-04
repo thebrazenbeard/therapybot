@@ -132,6 +132,9 @@ class HttpPrivacyWave2Tests(unittest.TestCase):
         self.assertEqual(200, self.call("/api/backup", headers=session)[0])
 
     def test_save_requires_positive_opt_in_and_unlocked_session(self):
+        # This synthetic persistence test explicitly approves FakeModel text;
+        # it does not qualify a real neural generated-output reviewer.
+        self.server.output_reviewer = lambda **kwargs: "allow"
         ordinary = {"message": "Explain what values mean in ACT", "save": False}
         self.assertEqual(200, self.call("/api/chat", method="POST", payload=ordinary, headers=self.csrf)[0])
         # Parent integration subsequently repaired the inherited ValueError
