@@ -48,6 +48,20 @@
       window.TherapyBotNeural?.isLoaded() ? 'On-device neural mode · Experimental and unqualified' :
       'Rules-only local engine · No model loaded';
   }
+  function reviewNeuralOutput({ candidateReply }) {
+    // Local lexical rejection only; this is NOT a validated clinical safety filter.
+    if (typeof candidateReply !== 'string' || !candidateReply.trim() || candidateReply.length > 2400) {
+      return {allow:false};
+    }
+    const blocked = [
+      /\b(?:kill|hurt|harm)\s+(?:yourself|someone else)\b/i,
+      /\b(?:ignore|stop)\s+(?:all\s+|your\s+)?(?:medication|doctor|emergency services)\b/i,
+      /\b(?:take|double|increase)\s+\d+(?:\.\d+)?\s*(?:mg|pills|tablets|grams)\b/i,
+      /\b(?:you (?:definitely|certainly) have|i (?:diagnose|can diagnose) you)\b/i,
+      /\b(?:don't tell anyone|keep this secret from)\b/i
+    ];
+    return {allow:!blocked.some(pattern=>pattern.test(candidateReply))};
+  }
   function init() {
     if (!window.TherapyBotEmbedded || !window.TherapyBotConversationAdapter) {
       status.textContent = 'Missing browser runtime; cannot converse.';
@@ -59,8 +73,12 @@
         respond: ({ message }) => window.TherapyBotEmbedded.respond({
           message, history: transcript.slice(0,-1).map(item => ({...item}))
         })
+      },{
+        id: 'experimental-neural', kind: 'in-browser-neural', execution: 'browser-local',
+        respond: async () => ({reply:await window.TherapyBotNeural.respond(transcript)})
       }],
-      defaultProviderId: 'embedded-semantic'
+      defaultProviderId: 'embedded-semantic',
+      outputGate: reviewNeuralOutput
     });
     refresh();
   }
@@ -99,7 +117,8 @@
       /\b(?:i(?:'m| am| feel)\s+suicidal|i\s+(?:want|plan|intend|might|may)\s+to\s+(?:kill|hurt|harm)\s+myself|i\s+(?:want|plan|intend|might|may)\s+to\s+end\s+my\s+life)\b/i,
       /\b(?:i(?:'m| am)\s+not safe|someone\s+is\s+(?:threatening|attacking)\s+me)\b/i,
       /\b(?:took|taken|swallowed|ingested|overdosed|poisoned|drank)\b.{0,70}\b(?:pills|poison|medication|substance|chemicals|overdose)\b/i,
-      /\b(?:not breathing|unresponsive|not responding|isn't responding|is not responding|won't wake|cannot wake|can't wake|unconscious|severe bleeding|bleeding heavily)\b/i
+      /\b(?:not breathing|unresponsive|not responding|isn't responding|is not responding|won't wake|cannot wake|can't wake|unconscious|severe bleeding|bleeding heavily)\b/i,
+      /\b(?:can't|cannot|couldn't|won't|will not)\s+(?:promise|guarantee|keep|say)\b.{0,55}\b(?:safe|safety)\b/i
     ].some(pattern => pattern.test(text));
   }
   function continuation(text) {
@@ -112,12 +131,16 @@
   function localRoute(text) {
     if (isStop(text)) return { kind:'pause' };
     if (/\b(?:i(?:'m| am) safe now|not in danger|this (?:is|was) hypothetical|this (?:is|was) fictional)\b/i.test(text)) acuteContext=false;
-    if (fictional(text)) {
+    const realWorldQualifier = /\b(?:but (?:i|we|my|someone)|in real life|this is real|actually (?:i|we|my|someone)|outside (?:the|my) story|happening right now)\b/i.test(text);
+    if (fictional(text) && !realWorldQualifier) {
       return { reply:'I understand this as fictional or hypothetical. I cannot infer the real-world safety of anyone from a quote. We can discuss the scene, but this is a limited rules-based experiment.' };
     }
     if (immediateDanger(text) || (acuteContext && continuation(text))) {
       acuteContext = true;
       return { reply:'This could be urgent, and I cannot assess how safe anyone is. If someone might be harmed right now, contact local emergency services immediately. In the U.S., call 911 for emergencies or 988 for crisis support. If possible, move away from immediate danger and get help from a person nearby.' };
+    }
+    if (/\b(?:privacy|data storage|my conversation|save my (?:data|chat)|store my (?:data|chat)|download consent|what do you store|where is my data)\b/i.test(text)) {
+      return {reply:'This page keeps conversation text in memory while open. It does not send messages to a model API or intentionally save transcripts. Browser caches may retain static files. A model download occurs only after consent; that request contacts Hugging Face. Clear erases this page’s in-memory conversation.'};
     }
     if (/\binner council\b/i.test(text)) {
       return {reply:'The Inner Council is not implemented in this browser experiment. This page cannot provide genuinely independent conversational perspectives.'};
@@ -148,15 +171,22 @@
     const turn = ++ticket;
     refresh();
     try {
-      if (window.TherapyBotNeural?.isLoaded()) {
-        const reply = await window.TherapyBotNeural.respond(transcript);
-        if (turn === ticket && !paused) say(reply, 'Experimental 135M model output. It has not been evaluated for accuracy or clinical safety.');
+      const neuralMode = Boolean(window.TherapyBotNeural?.isLoaded());
+      const result = await session.turn({
+        message, mode:'direct',
+        providerId:neuralMode ? 'experimental-neural' : 'embedded-semantic',
+        timeoutMs:neuralMode ? 60000 : 15000
+      });
+      if (turn !== ticket || paused) return;
+      if (result?.status === 'ok' && typeof result.reply === 'string') {
+        const note = neuralMode && result.responseOrigin === 'selected-provider'
+          ? 'Experimental 135M model output, permitted by a limited lexical filter—not clinical validation.'
+          : '';
+        say(result.reply,note);
+      } else if (neuralMode && result?.status === 'suppressed') {
+        say('The experimental output filter suppressed this unqualified model reply.');
       } else {
-        const result = await session.turn({message,mode:'direct',timeoutMs:15000});
-        if (turn !== ticket || paused) return;
-        const reply = result?.status === 'ok' && typeof result.reply === 'string'
-          ? result.reply : result?.message || 'A local error interrupted this turn.';
-        say(reply);
+        say(result?.message || 'A local error interrupted this turn.');
       }
     } catch (error) {
       if (turn === ticket && !paused) say('Local inference failed. ' +

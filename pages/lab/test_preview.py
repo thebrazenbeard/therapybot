@@ -42,6 +42,8 @@ class PreviewTests(unittest.TestCase):
         self.assertIn('let transcript = []', js)
         self.assertIn('acuteContext', js)
         self.assertIn('paused', js)
+        self.assertIn('outputGate: reviewNeuralOutput', js)
+        self.assertIn("kind: 'in-browser-neural'", js)
         neural = (LAB / 'neural.js').read_text(encoding='utf-8')
         self.assertIn('loadModel([file]', neural)
         self.assertNotIn('loadModelFromUrl', neural)

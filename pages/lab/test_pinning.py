@@ -43,7 +43,8 @@ class PinnedRuntimeTests(unittest.TestCase):
             self.assertFalse(target.exists())
 
     def test_no_weight_asset_in_allowlist(self):
-        self.assertEqual(len(WLLAMA_ASSETS), 4)
+        self.assertEqual(len(WLLAMA_ASSETS), 5)
+        self.assertIn('@wllama/wllama/LICENCE', WLLAMA_ASSETS)
         self.assertFalse(any(".gguf" in key or ".gguf" in dest for key, (dest, _) in WLLAMA_ASSETS.items()))
 
 

@@ -12,6 +12,7 @@ LAB_FILES = ("index.html", "lab.css", "lab.js", "neural.js")
 RUNTIME_FILES = ("catalog.js", "engine.js", "conversation_adapter.js")
 WLLAMA_ASSETS = {
     "@wllama/wllama/esm/index.js": ("runtime/wllama/esm/index.js", "e5506753e41a59c11f61f2c52422045be9fc76e32a7e47f037aaad5df4ec723e"),
+    "@wllama/wllama/LICENCE": ("runtime/wllama/LICENCE", "5866e3bd7e3cbd3f7c8bea6efd8a1e7fa7cc8de68c30f428aff7c6584a0fb720"),
     "@wllama/wllama/esm/wasm/wllama.wasm": ("runtime/wllama/esm/wasm/wllama.wasm", "551f13439366eff11e057b1b91fe46a7fdac29d56d67372d4c5f19a549dfe70c"),
     "@wllama/wllama-compat/wasm/wllama.js": ("runtime/wllama-compat/wasm/wllama.js", "2649eeb408988841c372e54805adfa25aed5d02f850c09add78c2f3ac0f3fce1"),
     "@wllama/wllama-compat/wasm/wllama.wasm": ("runtime/wllama-compat/wasm/wllama.wasm", "2db3f67d0bcc19cdf8f14f129e46cab691bff898954808f8a2dc4c586eb5bb68"),
