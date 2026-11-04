@@ -185,7 +185,8 @@
     // a different present-tense disclosure later in the same message.
     const clauses = text.split(/(?<=[.!?;])\s+|\s*;\s*|\s*,?\s+but\s+|\s+and now\s+/);
     for (const clause of clauses) {
-      const fictional = /\b(?:fiction|fictional|novel|screenplay|book character|hypothetical|grammar example|song lyrics|nightmare)\b/.test(clause);
+      const fictional = /\b(?:fiction|fictional|novel|screenplay|book character|hypothetical|grammar example|song lyrics|nightmare)\b/.test(clause) ||
+        /\b(?:for (?:an? )?(?:english|grammar) (?:exercise|lesson|class)|quoted (?:an? )?(?:fictional|example|line|sentence))\b/.test(clause);
       if (historicalAndResolved && /\b(?:years ago|last year|in the past|used to)\b/.test(clause)) continue;
       const negatedIntent = /\b(?:do not|don't|never|not|won't|will not)\s+(?:plan|intend|want|going|about|hurt|kill)\b/.test(clause);
       const negatedConcern = /\b(?:not suicidal|not going to hurt|don't want to die|do not want to die|never want to die|never suicidal|not about suicide|don't intend to harm|do not intend to harm)\b/.test(clause);
@@ -196,6 +197,21 @@
       const quantifiedMedication = /\b(?:i|we)\s+(?:(?:just|already|recently)\s+)?(?:took|swallowed|ingested|ate)\s+(?:\d{2,}|dozens? of)\s+(?:\w+\s+){0,2}(?:painkillers?|pills?|tablets?|capsules?|medications?|pain ?medications?)\b/.test(clause) &&
         /\b(?:just|now|today|tonight|recently|already|this morning|this evening)\b/.test(clause);
       const acuteOverdose = /\b(?:i|we)\s+(?:just|already|recently)?\s*overdosed\b/.test(clause);
+      // Bounded synthetic preflight cues. These are not a general poison,
+      // violence, emergency, or suicide classifier; retain uncertainty and
+      // the fiction/historical/negation gates applied to the other cues.
+      const acuteToxicIngestion = /\b(?:i|we)\s+(?:(?:just|already|recently)\s+)?(?:swallowed|drank|ingested|ate|consumed)\b.{0,90}\b(?:antifreeze|ethylene glycol|methanol)\b/.test(clause) &&
+        /\b(?:just|already|recently|minutes? ago|hours? ago|now|right now|today|tonight|this morning|this evening)\b/.test(clause) &&
+        !/\b(?:i|we)\s+(?:did not|didn't|never)\s+(?:swallow|drink|ingest|eat|consume)\b/.test(clause);
+      const currentWeaponThreat = /\b(?:my\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex|friend|roommate)|someone|he|she|they)\b.{0,80}\b(?:has|held|holding|put|pressed|pointed|aimed)\b.{0,35}\b(?:(?:a|the|his|her)\s+)?(?:knife|blade)\b.{0,35}\b(?:at|against|to|on)\s+my\s+(?:throat|neck)\b/.test(clause) &&
+        /\b(?:right now|now|tonight|today|currently|at this moment)\b/.test(clause) &&
+        !/\b(?:does not|doesn't|did not|didn't|never)\s+(?:have|hold|put|press|point|aim)\b/.test(clause);
+      const thirdPersonImminentJump = /\b(?:my\s+)?(?:friend|daughter|son|child|partner|spouse|husband|wife|brother|sister|mother|father|roommate|he|she|they)\b.{0,55}\b(?:about to|going to|plans? to|intend(?:s)? to|will)\s+(?:jump|step)\s+(?:off|from)\s+(?:(?:a|the|this)\s+)?(?:parking garage|garage|bridge|roof|building|cliff|ledge)\b/.test(clause) &&
+        !/\b(?:is|are|was|were|am)\s+not\s+(?:about to|going to)\b/.test(clause) &&
+        !/\b(?:isn't|aren't|wasn't|weren't)\s+(?:about to|going to)\b/.test(clause);
+      const thirdPersonUnresponsiveIngestion = /\b(?:my\s+)?(?:daughter|son|child|baby|partner|spouse|husband|wife|friend|brother|sister|mother|father)\b.{0,75}\b(?:swallowed|took|ingested|ate)\b.{0,60}\b(?:pills?|tablets?|capsules?|medication|medicine)\b/.test(clause) &&
+        /\b(?:unresponsive|unconscious|not breathing|won't wake|cannot wake|can't wake|not waking up)\b/.test(clause) &&
+        !/\b(?:not|isn't|wasn't)\s+(?:unresponsive|unconscious)\b/.test(clause);
       const recentFistful = /\b(?:took|swallowed|ingested|ate)\s+(?:a|two|three|several|multiple)?\s*(?:fistfuls?|handfuls?)\b/.test(clause) &&
         /\b(?:pills?|tablets?|medication|painkillers?|fistfuls?)\b/.test(text) &&
         /\b(?:just|already|minutes? ago|hours? ago|now|tonight|today)\b/.test(text);
@@ -225,6 +241,7 @@
       const spanishCurrentIntent = /\b(?:voy a quitarme la vida|me voy a suicidar|voy a matarme)\b/.test(clause) &&
         /\b(?:esta noche|ahora|hoy|ya|pronto)\b/.test(clause);
       const immediate = (acuteIngestion && !routineMedication) || (quantifiedMedication && !routineMedication) ||
+        acuteToxicIngestion || currentWeaponThreat || thirdPersonImminentJump || (thirdPersonUnresponsiveIngestion && !routineMedication) ||
         acuteOverdose || recentFistful || acuteBleeding || bandageSoaking || acuteBreathing || acuteInjury || weaponAtSelf || imminentJump ||
         atLedge || garageCarbonMonoxide || thirdPersonImminent || spanishCurrentIntent || (explicitCurrentIntent && !negatedIntent);
       // A fictional frame describes source context; it must not automatically
@@ -245,8 +262,22 @@
     const direct = /\b(?:my (?:partner|husband|wife|boyfriend|girlfriend|spouse|ex))\b.{0,80}\b(?:hit|punched|assaulted|struck|choked|strangled|slapped|kicked|pushed|threatened|attacked)\s+(?:me|my)\b/.test(text);
     const confinement = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:locked me in|locks me in|keeps me locked|trapped me|traps me|won't let me leave|will not let me leave|prevents me leaving)\b/.test(text);
     const blockedExit = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:blocked (?:the|my|our) (?:doorway|exit|door)|blocked me from leaving|took my phone|has taken my phone)\b/.test(text);
-    const fear = /\b(?:afraid|scared|terrified|unsafe|fear|can't go home|cannot go home|don't feel safe|do not feel safe)\b/.test(text);
+    const fear = /\b(?:afraid|scared|terrified|frightened|unsafe|fear|can't go home|cannot go home|don't feel safe|do not feel safe)\b/.test(text);
     return (direct || confinement || blockedExit) && fear;
+  }
+
+  function unresolvedAcuteFollowup(message, history) {
+    // A new, otherwise benign question must not erase the immediately recent
+    // user's acute disclosure just because it lacks a repeated danger word.
+    // Restrict carry-forward to explicit short followups and the last four
+    // conversation turns: this is not a durable safety state or assessment.
+    const text = clean(message, 1000).trim();
+    if (!/^(?:what (?:should|can|do) i do(?: now| next| about (?:it|that|this))?|what (?:now|next)|how (?:should|can|do) i (?:respond|proceed|handle|deal with) (?:this|that|it)|please help (?:me )?(?:now|with (?:this|that|it)))\b/.test(text)) return false;
+    if (/\b(?:safe now|not real|didn't happen|did not happen|fiction|hypothetical|screenplay|false alarm)\b/.test(text)) return false;
+    const recent = Array.isArray(history) ? history.slice(-4).reverse().find(function (item) {
+      return item && item.role === 'user' && typeof item.content === 'string';
+    }) : null;
+    return Boolean(recent && riskRoute(recent.content) === 'urgent_review');
   }
 
   function matchedTopic(text) {
@@ -336,7 +367,8 @@
     const style = ['direct', 'warm', 'analytical'].includes(options.style) ? options.style : 'direct';
     const interpersonalViolence = partnerViolence(message);
     const observedRisk = riskRoute(message);
-    const route = interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
+    const route = observedRisk === 'urgent_review' || unresolvedAcuteFollowup(message, history) ? 'urgent_review' :
+      interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
     // English-only rule tables cannot safely interpret detected non-English
     // input. Keep known danger routes authoritative and suppress Council mode
     // by returning a non-normal route on an unsupported-language abstention.

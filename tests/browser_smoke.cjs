@@ -304,7 +304,9 @@ async function run() {
     });
 
     await test('Typed Solo command addresses only a configured member', async () => {
-      const answer = await send(page, 'Solo Strategist: What is the next practical question to ask?');
+      // After an unsupported prompt, the earlier topic is not assumed safe to
+      // resurrect. State the actual work context when requesting Solo mode.
+      const answer = await send(page, 'Solo Strategist: For my work conversation with a colleague, what is the next practical question to ask?');
       assert.deepEqual(answer.speakers, ['Perspective 1']);
       assert.match(answer.text, /user-defined lens/i);
     });
