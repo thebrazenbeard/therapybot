@@ -323,6 +323,27 @@ class EmbeddedModelContract(unittest.TestCase):
         self.assertIn("vent", answer["reply"].lower())
         self.assertNotIn("which part of what happened made you angriest", answer["reply"].lower())
 
+    def test_meta_vent_request_does_not_reanchor_followup_to_anger(self):
+        original = "My manager wants me to pay for company truck gas with my own money."
+        for preference in (
+            "I just want to vent, no advice please.",
+            "I need to vent for a minute, no advice.",
+        ):
+            with self.subTest(preference=preference):
+                history = [
+                    {"role": "user", "content": original},
+                    {"role": "assistant", "content": "That is a workplace constraint."},
+                    {"role": "user", "content": preference},
+                    {"role": "assistant", "content": "You can vent."},
+                ]
+                next_answer = self._reply("What are my options?", history=history)
+                self.assertTrue(next_answer["state"]["followup"])
+                self.assertEqual(next_answer["state"]["topic"], "work")
+                self.assertIn("workplace", next_answer["reply"].lower())
+
+        deliberate_switch = self._reply("I'm furious and I need to vent.")
+        self.assertEqual(deliberate_switch["state"]["topic"], "anger")
+
     def test_explicit_practical_preference_keeps_unrejected_prior_topic(self):
         answer = self._reply(
             "I need practical options, not reassurance.",

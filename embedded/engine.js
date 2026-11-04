@@ -55,8 +55,10 @@
     },
     {
       key: 'anger',
-      words: ['angry', 'anger', 'furious', 'rage', 'resentment', 'frustrated', 'frustration', 'irritated', 'enraged', 'mad', 'vent'],
-      phrases: ['pissed off', 'need to vent', 'so angry', 'fed up'],
+      // A request to vent changes the desired response style; by itself it
+      // does not establish anger or supersede the earlier conversation topic.
+      words: ['angry', 'anger', 'furious', 'rage', 'resentment', 'frustrated', 'frustration', 'irritated', 'enraged', 'mad'],
+      phrases: ['pissed off', 'so angry', 'fed up'],
       openings: [
         'Anger does not, by itself, establish a desire to hurt anyone. I can listen without jumping to that conclusion.',
         'I can take the frustration seriously without deciding in advance what it means.'
