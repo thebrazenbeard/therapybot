@@ -14,6 +14,7 @@ import sqlite3
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
@@ -45,11 +46,21 @@ class Vault:
         if os.name != "nt":
             os.chmod(self.path, 0o600)
 
+    @contextmanager
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=15)
-        db.execute("PRAGMA secure_delete = ON")
-        db.execute("PRAGMA journal_mode = DELETE")
-        return db
+        try:
+            db.execute("PRAGMA secure_delete = ON")
+            db.execute("PRAGMA journal_mode = DELETE")
+            yield db
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+        finally:
+            # Connection.__exit__ alone commits but does not close. On Windows
+            # that leaves an exclusive file handle and blocks backup/removal.
+            db.close()
 
     @property
     def unlocked(self) -> bool:

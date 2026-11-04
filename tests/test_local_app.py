@@ -2,6 +2,7 @@
 
 import http.client
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -17,6 +18,14 @@ SENTINEL = "SYNTHETIC_PRIVATE_JOURNAL_CANARY_91"
 
 
 class VaultTests(unittest.TestCase):
+    def test_sqlite_connection_is_closed_on_context_exit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Vault(Path(directory) / "connection.sqlite3")
+            with vault._connect() as db:
+                self.assertEqual(db.execute("SELECT 1").fetchone()[0], 1)
+            with self.assertRaises(sqlite3.ProgrammingError):
+                db.execute("SELECT 1")
+
     def test_records_encrypted_searchable_and_lockable(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "private.sqlite3"
