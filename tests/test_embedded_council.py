@@ -13,6 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EMBEDDED = ROOT / "embedded"
+# Windows CI can spend several seconds starting Node under a cold runner.
+# Keep a finite outer timeout; each VM script also has its own 1.5s bound.
+NODE_SUBPROCESS_TIMEOUT_SECONDS = 30
 
 NODE_PROBE = r"""
 const fs = require('node:fs');
@@ -63,7 +66,7 @@ class CouncilContract(unittest.TestCase):
             encoding="utf-8",
             capture_output=True,
             cwd=ROOT,
-            timeout=8,
+            timeout=NODE_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
