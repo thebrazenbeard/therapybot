@@ -29,6 +29,7 @@ const FILES = Object.freeze({
   '/catalog.js': ['catalog.js', 'text/javascript; charset=utf-8'],
   '/engine.js': ['engine.js', 'text/javascript; charset=utf-8'],
   '/council.js': ['council.js', 'text/javascript; charset=utf-8'],
+  '/conversation_adapter.js': ['conversation_adapter.js', 'text/javascript; charset=utf-8'],
   '/ui.js': ['ui.js', 'text/javascript; charset=utf-8'],
 });
 
