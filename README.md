@@ -4,6 +4,8 @@
 
 TherapyBot is a $0, offline-capable mental-health **support and education** application for Windows and Linux. It pairs a local GGUF model (KoboldCPP or llama.cpp-compatible endpoint) with optional passphrase-encrypted personal records, a local journal, and an inspectable, source-linked psychology/sociology reference register. There are no accounts, analytics, advertising IDs, cloud inference fallbacks, or subscription APIs.
 
+**Web interface distinction:** The real local HTML chat runs only at `http://127.0.0.1:8768` after you start the app and a local model. The [GitHub Pages introduction](https://thebrazenbeard.github.io/therapybot/) links to a [read-only interface preview](https://thebrazenbeard.github.io/therapybot/interface-preview.html), the visual seed for a future richer local UI. Neither public page has chat submission, vault unlock, or model connection. The Pages workflow publishes only `pages/`, never the local-only `static/` interface, personal records, or repository root.
+
 > This software has not been clinically validated. Passing synthetic tests does not show that generated responses are safe or effective treatment. An LLM can give harmful, biased, or inaccurate advice. For immediate danger, contact emergency services; in the United States, you can call or text **988**.
 
 ## Run locally
@@ -29,6 +31,8 @@ Open `http://127.0.0.1:8768` in a browser on the same computer. Use `--no-browse
 
 If the model server is offline, ordinary chat returns an explicit error. TherapyBot **never** silently switches to an online service. Its static safety response remains available for high-risk text, but the classifier is rudimentary and cannot reliably detect all danger or interpret every negation.
 
+One bounded synthetic runtime probe on VN2 verified the **actual TherapyBot HTTP → ModelClient → local llama.cpp GGUF** path using Granite 3.3 2B Q4_K_M (HTTP 200, approximately 11.6 seconds, no saved record). That does not qualify other models, clinical safety, Windows inference, or browser E2E behavior.
+
 ## Current capabilities
 
 - Local browser conversation, selectable style and response depth.
@@ -37,7 +41,7 @@ If the model server is offline, ordinary chat returns an explicit error. Therapy
 - Local keyword retrieval over original evidence summaries with clickable external source references. Those references may help ground an answer; they are **not** automatic fact-checking of generated claims.
 - Model-independent heuristic safeguards for direct danger disclosures and explanatory crisis resources.
 - Loopback-only HTTP listener, Host/Origin checks, per-process request token for mutations, and disabled request logging.
-- Curated external scientific, clinical and philosophical source metadata: 22 researched entries, combined with built-in records to yield 23 distinct source URLs for local retrieval. `research/` also contains 30 original synthetic train/dev/eval examples (18/6/6). No model fine-tuning has occurred; source rights and clinical quality need separate review.
+- Curated external scientific, clinical, sociological and philosophical source metadata: 32 researched entries, combined with built-in records to yield 33 distinct source URLs for local retrieval. `research/` also contains 30 original synthetic train/dev/eval examples (18/6/6). A separate **34-case adversarial safety holdout found 23 routing mismatches**, including urgent cases missed by the heuristic; it is evaluation-only, not training data. No model fine-tuning has occurred; source rights and clinical quality need separate review.
 
 ## Privacy and limits
 
@@ -46,6 +50,8 @@ The SQLite vault uses a passphrase-derived key (scrypt) with Fernet authenticate
 The app stores an encrypted copy of each explicitly saved conversation or journal entry; some metadata (record type and timestamp) remains visible. Backup downloads contain encrypted SQLite records, but **browser downloads, filesystem snapshots, swap, crash dumps, and externally created copies can persist**. Deleting in-app records cannot remove every external backup or filesystem snapshot. Keep passphrases safe: there is no remote account-based recovery.
 
 The app does **not** ingest personal medical records, other conversations, or private attachments by default. Do not commit sensitive user data, vaults, or model weights. The evidence register contains original brief summaries and pointers to external pages, not bulk third-party article text. Readability is not a license to redistribute or train on source material.
+
+Do not enter private medical or mental-health information into a public GitHub Pages copy of an application. Its public preview contains no active input fields and makes no requests to TherapyBot's local APIs. The private web interface is served from the loopback HTTP server above.
 
 ## Development and evidence
 

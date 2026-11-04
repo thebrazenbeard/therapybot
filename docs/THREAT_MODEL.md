@@ -6,6 +6,7 @@
 - Browsers and arbitrary websites are potentially hostile; only same-origin requests with verified Host/Origin and a random local request token should mutate data.
 - Local GGUF runtime is a distinct process. TherapyBot cannot attest that it does not log prompts; its endpoint is strictly restricted to loopback addresses to prevent unexpected third-party transfer.
 - Evidence snippets and model completions are untrusted text, never executable instructions or source of authority to perform file/network actions.
+- GitHub Pages is an **untrusted public origin**, not the local TherapyBot runtime. Publishing backend-dependent `static/index.html` there would route relative API requests containing conversations/passphrases to the public Pages origin. The Pages artifact must therefore be restricted to noninteractive `pages/` landing and interface-preview assets.
 - An adversary with local machine access, keylogging, a compromised browser, or process memory access may defeat these protections.
 
 ## Implemented controls
@@ -16,6 +17,7 @@
 4. scrypt key derivation with random salt; Fernet authenticated per-record encryption; no saved key; passphrase minimum length when initializing.
 5. Explicit user opt-in before persistence; journal submission is an explicit write; backup contains ciphertext rather than plaintext export.
 6. No external scripts or UI telemetry; UI must use `textContent` for model and user messages.
+7. Separate public Pages workflow publishes only `pages/` (no chat/unlock forms or scripts). Functional chat and vault remain confined to the loopback server. `tests/test_pages.py` and `tests/test_public_pages.py` check this repository-level boundary; deployment output must be checked independently.
 
 ## Outstanding and release-blocking
 

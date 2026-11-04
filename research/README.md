@@ -2,6 +2,7 @@
 
 - `sources.json`: curated bibliographic source pointers and original short summaries. It includes clinical guidance, systematic reviews, longitudinal social research, public-health sources and AI privacy/safety frameworks. Check the actual article for applicability, update date, evidence certainty and precise section support.
 - `behavior_examples.jsonl`: **30 original, synthetic** conversations with separate `train` (18), `dev` (6) and `eval` (6) splits. These were authored for TherapyBot prototyping and review; they are not real patient transcripts, not copied clinical publications, and not validated therapy treatment records.
+- `safety_holdout.jsonl`: **34 independent synthetic evaluation-only** adversarial cases with recorded observed routes. **23/34 did not match the independent reviewer's expected route**. This is a historical failure record and must never enter train/dev or be used to claim clinical validity; see `docs/SAFETY_HOLDOUT_20261104.md`.
 - `../scripts/validate_research.py`: deterministic structural validation with source-ID references and split/rights checks; offline, no article scraping.
 
 All external sources are explicitly labeled `model_training_rights: not-cleared`. No external source body is bundled for fine-tuning. The synthetic examples may be candidates for local experiments after independent clinical, rights and model reviews; **no model training or clinical outcome has been demonstrated** by committing this folder.

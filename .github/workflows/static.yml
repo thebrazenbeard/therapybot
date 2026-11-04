@@ -1,4 +1,4 @@
-# Simple workflow for deploying static content to GitHub Pages
+# Publish the public preview only. Never publish the local runtime UI or data.
 name: Deploy static content to Pages
 
 on:
@@ -36,8 +36,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Public Pages is documentation only. Never publish the local vault
-          # UI or any application files that can solicit private records.
+          # Publish ONLY the safe informational preview pages. Never expose
+          # static/index.html (the real local vault/chat form) on github.io.
           path: 'pages'
       - name: Deploy to GitHub Pages
         id: deployment

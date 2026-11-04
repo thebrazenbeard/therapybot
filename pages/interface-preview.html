@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="A public preview of TherapyBot, an experimental, free, local-first AI reflection and mental-health education application for Windows and Linux. The working chat runs on your own computer.">
+  <title>TherapyBot — A place to think, on your terms</title>
+  <link rel="stylesheet" href="interface-preview.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="page-wrap">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="TherapyBot home"><span class="brand-mark" aria-hidden="true">✳</span><span>therapybot<span class="brand-period">.</span></span></a>
+      <nav class="top-links" aria-label="Primary navigation">
+        <a href="#approach">Approach</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#run">Run locally</a>
+        <a class="nav-github" href="https://github.com/thebrazenbeard/therapybot">Source code <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="home" aria-labelledby="hero-heading">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> LOCAL-FIRST · PUBLIC SOURCE · EXPERIMENTAL</p>
+          <h1 id="hero-heading">Some thoughts need <em>room.</em></h1>
+          <p class="lede">A place to untangle a question, examine a pattern, or simply think out loud—with an AI model you run on your own computer.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/thebrazenbeard/therapybot#run-locally">Get started locally <span aria-hidden="true">↗</span></a>
+            <a class="button button-outline" href="https://github.com/thebrazenbeard/therapybot">Explore the code <span aria-hidden="true">→</span></a>
+          </div>
+          <p class="public-disclosure"><span aria-hidden="true">◎</span> This public preview is not a live conversation. There is nothing to sign into or enter here. Actual chat runs through your separately installed local TherapyBot and model server.</p>
+        </div>
+        <div class="app-preview" aria-label="Read-only illustration of the local TherapyBot interface">
+          <div class="preview-caption"><span class="preview-caption-dot" aria-hidden="true"></span> PUBLIC PREVIEW <span class="preview-sample">ILLUSTRATIVE · NOT LIVE</span></div>
+          <div class="preview-shell">
+            <aside class="preview-sidebar" aria-label="Illustrative application sections">
+              <div class="preview-app-brand"><span aria-hidden="true">✳</span> therapybot.</div>
+              <div class="preview-nav selected">◌ <span>Conversation</span></div>
+              <div class="preview-nav">▤ <span>Journal</span></div>
+              <div class="preview-nav">⌕ <span>History</span></div>
+              <div class="preview-nav">◈ <span>Sources</span></div>
+              <div class="preview-nav">◇ <span>My vault</span></div>
+              <p class="preview-sidebar-note">Local software. Your choice what to keep.</p>
+            </aside>
+            <div class="preview-workspace">
+              <div class="preview-app-top"><span>CONVERSATION</span><span class="preview-model">Model: local</span></div>
+              <div class="preview-app-title">A place to think.</div>
+              <div class="preview-chat">
+                <div class="preview-bubble preview-bubble-user"><strong>YOU · SAMPLE</strong><p>How do I tell the difference between avoiding a difficult conversation and setting a boundary?</p></div>
+                <div class="preview-bubble preview-bubble-bot"><strong>THERAPYBOT · SAMPLE RESPONSE</strong><p>Start with what you can actually observe. What are you protecting, and what would the conversation cost you? A boundary names a choice you can make. Avoidance often leaves that choice unexamined.</p><p>Neither label needs to be a verdict. We can look at the specifics.</p></div>
+              </div>
+              <div class="preview-library"><div class="preview-library-title">REFERENCE LIBRARY <span>Example source cards</span></div><div class="preview-source-cards"><a href="https://www.nimh.nih.gov/health/topics/psychotherapies">NIMH · Psychotherapies <span aria-hidden="true">↗</span></a><a href="https://www.cdc.gov/social-connectedness/about/">CDC · Social connection <span aria-hidden="true">↗</span></a></div></div>
+              <div class="preview-disabled">To have a conversation, launch TherapyBot on your computer.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="disclaimer" aria-label="Important clinical and privacy limits">
+        <div class="disclaimer-symbol" aria-hidden="true">!</div>
+        <p><strong>Support and education, not treatment.</strong> TherapyBot is not a licensed therapist, diagnostic system, or emergency service. Generated answers can be wrong or unsafe, and the application has not been clinically validated. If someone is in immediate danger, contact local emergency services; in the U.S., call or text <a href="https://988lifeline.org/">988</a>.</p>
+      </section>
+
+      <section class="section" id="approach" aria-labelledby="approach-heading">
+        <div class="section-intro"><p class="eyebrow">THE APPROACH</p><h2 id="approach-heading">Built around boundaries that matter.</h2><p>Thoughtful conversation does not require an account, a subscription, or giving your private history to an online service.</p></div>
+        <div class="principles">
+          <article class="principle"><span class="principle-number">01 / LOCAL</span><div class="principle-icon" aria-hidden="true">⌂</div><h3>Your machine is the host.</h3><p>The application runs on Windows or Linux with a separately configured local GGUF-compatible model endpoint. No mandatory cloud inference or paid API.</p></article>
+          <article class="principle"><span class="principle-number">02 / CHOICE</span><div class="principle-icon" aria-hidden="true">◌</div><h3>Nothing saved by default.</h3><p>Choose whether to keep a conversation. Optional encrypted local records and journaling use a passphrase; privacy still depends on the computer and model runtime.</p></article>
+          <article class="principle"><span class="principle-number">03 / INQUIRY</span><div class="principle-icon" aria-hidden="true">⌁</div><h3>Questions stay questions.</h3><p>Explore relationships, behavior, identity, trauma and philosophy without treating every unusual idea as a symptom or every reflection as a diagnosis.</p></article>
+        </div>
+      </section>
+
+      <section class="section section-evidence" id="evidence" aria-labelledby="evidence-heading">
+        <div class="section-intro"><p class="eyebrow">EVIDENCE, WITH LIMITS</p><h2 id="evidence-heading">A source is a starting point, not a verdict.</h2><p>TherapyBot's local reference library uses traceable summaries and links covering psychological methods, mental health and social context. It is deliberately open to scrutiny.</p></div>
+        <div class="evidence-grid">
+          <article class="evidence-row"><span class="topic-marker">A</span><div><h3>Psychology &amp; behavior</h3><p>CBT-informed reflection, ACT values work, DBT skills, emotional regulation and trauma-aware conversation.</p></div></article>
+          <article class="evidence-row"><span class="topic-marker">B</span><div><h3>Social context</h3><p>Relationships, isolation, adversity and social determinants—not just what happens inside one person's head.</p></div></article>
+          <article class="evidence-row"><span class="topic-marker">C</span><div><h3>Uncertainty &amp; philosophy</h3><p>Identity, spirituality, consciousness and competing explanations, with a distinction between inquiry and established evidence.</p></div></article>
+        </div>
+        <div class="evidence-footer"><p>Public sources are not automatically licensed for model training. The linked research register is metadata and original short summaries; no outside article full texts or private personal records are included by default.</p><a href="https://github.com/thebrazenbeard/therapybot/tree/main/research">Inspect the research register <span aria-hidden="true">↗</span></a></div>
+      </section>
+
+      <section class="run-section" id="run" aria-labelledby="run-heading">
+        <div class="run-copy"><p class="eyebrow">START ON YOUR COMPUTER</p><h2 id="run-heading">The conversation stays local.</h2><p>This website cannot read, host or recover your vault. To use TherapyBot, install the application and configure a compatible local model runtime first.</p><a class="button button-light" href="https://github.com/thebrazenbeard/therapybot#run-locally">Read Windows &amp; Linux setup <span aria-hidden="true">↗</span></a></div>
+        <ol class="run-steps">
+          <li><span class="step-no">01</span><div><h3>Get the source</h3><p>Clone or download the free repository and install its local Python requirements.</p></div></li>
+          <li><span class="step-no">02</span><div><h3>Start a local model</h3><p>Configure KoboldCPP, llama.cpp or a compatible loopback model endpoint.</p></div></li>
+          <li><span class="step-no">03</span><div><h3>Open your own interface</h3><p>Launch TherapyBot, then visit its local browser address. Saving records remains your choice.</p></div></li>
+        </ol>
+      </section>
+    </main>
+
+    <footer class="footer"><div class="footer-brand">✳ therapybot<span>.</span></div><p>Independent thought. Local tools. Honest limits.</p><nav aria-label="Footer links"><a href="https://github.com/thebrazenbeard/therapybot">GitHub</a><a href="https://github.com/thebrazenbeard/therapybot/blob/main/docs/THREAT_MODEL.md">Privacy &amp; threat model</a><a href="https://github.com/thebrazenbeard/therapybot/blob/main/docs/REVIEW_FINDINGS.md">Review findings</a></nav><p class="footer-last">Experimental software · $0 mandatory subscription cost · No clinical efficacy claim</p></footer>
+  </div>
+</body>
+</html>

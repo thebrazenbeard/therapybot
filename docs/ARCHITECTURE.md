@@ -14,4 +14,6 @@ TherapyBot HTTP handler
 
 The application handles user-approved chat persistence. Model prompt context is explicit, bounded to recent messages from the browser, not silently sourced from unrelated private documents. The API is intentionally local-only, without plugins capable of arbitrary actions. The model can generate false information or dangerous advice; basic prompts and rules are not a clinical safety proof. Independent human clinical review is still required.
 
+**Two web surfaces, different trust boundaries:** `static/index.html` belongs exclusively to the local loopback HTTP handler above, which injects its per-process request token. The public `pages/index.html` landing page and `pages/interface-preview.html` interface concept are read-only HTML/CSS deployed via GitHub Pages. They must never expose chat submission, journaling, passwords, memory controls or a network path into the local server. A Pages deployment is not proof of local-chat functionality.
+
 Potential future: better retrieval, consented long-term memory, backup restoration, rigorous safety evaluations, locally measured model selection and inference. Do not claim first-release requirements complete without actual local model and host demonstration.

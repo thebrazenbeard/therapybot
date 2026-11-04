@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "research" / "sources.json"
 EXAMPLES = ROOT / "research" / "behavior_examples.jsonl"
+HOLDOUT = ROOT / "research" / "safety_holdout.jsonl"
 
 
 def validate():
@@ -81,6 +82,32 @@ def validate():
             problems.append(f"{name}: unexpectedly long training response")
     if len(examples) < 25 or counts["train"] < 15 or counts["dev"] < 4 or counts["eval"] < 5:
         problems.append("At least 25 examples and train/dev/eval coverage 15/4/5 required")
+
+    # This independent adversarial holdout is explicitly quarantined from
+    # training data. Preserve historical observed outcomes even after fixes.
+    if HOLDOUT.exists():
+        holdout_ids = set()
+        for line_no, line in enumerate(HOLDOUT.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                case = json.loads(line)
+            except json.JSONDecodeError:
+                problems.append(f"holdout line {line_no}: invalid JSON")
+                continue
+            case_id = case.get("id")
+            if not isinstance(case_id, str) or not case_id or case_id in holdout_ids or case_id in example_ids:
+                problems.append(f"holdout line {line_no}: missing or duplicate ID")
+            holdout_ids.add(case_id)
+            if case.get("provenance") != "original_synthetic" or case.get("use") != "evaluation_only":
+                problems.append(f"{case_id}: holdout must remain original and evaluation-only")
+            if case.get("expected") not in {"immediate", "concern", "normal"} or case.get("observed") not in {"immediate", "concern", "normal"}:
+                problems.append(f"{case_id}: invalid safety route")
+            text_prompt = case.get("message")
+            if not isinstance(text_prompt, str) or len(text_prompt.strip()) < 8:
+                problems.append(f"{case_id}: missing synthetic message")
+            elif text_prompt.casefold().strip() in prompts:
+                problems.append(f"{case_id}: evaluation prompt leaked into train/dev/eval seed")
     return problems, len(sources), len(examples), dict(counts)
 
 
