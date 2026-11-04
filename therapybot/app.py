@@ -24,6 +24,7 @@ EMBEDDED_ASSETS = {
     "catalog.js": "text/javascript; charset=utf-8",
     "engine.js": "text/javascript; charset=utf-8",
     "council.js": "text/javascript; charset=utf-8",
+    "conversation_adapter.js": "text/javascript; charset=utf-8",
     "ui.js": "text/javascript; charset=utf-8",
     "manifest.json": "application/json; charset=utf-8",
 }

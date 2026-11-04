@@ -565,7 +565,7 @@ class EmbeddedModelContract(unittest.TestCase):
         scanner = _ElementScanner()
         scanner.feed((EMBEDDED / "index.html").read_text(encoding="utf-8"))
         script_paths = [attrs["src"] for tag, attrs in scanner.tags if tag == "script" and "src" in attrs]
-        self.assertEqual(script_paths, ["catalog.js", "engine.js", "council.js", "ui.js"])
+        self.assertEqual(script_paths, ["catalog.js", "engine.js", "council.js", "conversation_adapter.js", "ui.js"])
         for script in script_paths:
             self.assertTrue((EMBEDDED / script).is_file())
         ids = {attrs.get("id") for _tag, attrs in scanner.tags}
@@ -598,7 +598,7 @@ class EmbeddedModelContract(unittest.TestCase):
             self.assertNotIn("://", name)
             self.assertTrue((EMBEDDED / name).resolve().is_relative_to(EMBEDDED.resolve()))
             self.assertTrue((EMBEDDED / name).is_file(), f"declared bundle asset missing: {name}")
-        self.assertTrue({"index.html", "style.css", "catalog.js", "engine.js", "council.js", "ui.js"} <= set(assets))
+        self.assertTrue({"index.html", "style.css", "catalog.js", "engine.js", "council.js", "conversation_adapter.js", "ui.js"} <= set(assets))
         for key in (
             "trained_neural_weights", "requires_external_inference_server", "requires_network_for_chat",
             "stores_conversation_by_default", "public_interactive_release_authorized",
