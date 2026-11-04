@@ -12,7 +12,7 @@ from pathlib import Path
 from . import __version__
 from .knowledge import search as source_search, sources
 from .model import ModelClient, ModelError
-from .output_review import REVIEW_HOLD_REPLY, review_candidate
+from .output_review import REVIEW_HOLD_REPLY, ReviewAdmission
 from .safety import CONCERN_PREFIX, IMMEDIATE_RESPONSE, classify
 from .storage import Vault, VaultError
 
@@ -51,6 +51,7 @@ class AppServer(ThreadingHTTPServer):
         # Only trusted server-side code may supply a reviewer. No qualified
         # generated-output reviewer is bundled; absent means quarantine.
         self.output_reviewer = output_reviewer
+        self.output_admission = ReviewAdmission()
         self.csrf = secrets.token_urlsafe(32)
         self.session = None  # Issued only after a correct vault passphrase.
         self.model_responded = False  # Only true after this process observed a reply.
@@ -230,10 +231,12 @@ class Handler(BaseHTTPRequestHandler):
                         reply = CONCERN_PREFIX + reply
                 else:
                     try:
-                        candidate = self.server.model.generate(msg, data.get("style", "direct"), data.get("depth", "balanced"), context, citations)
-                        verdict = review_candidate(
-                            message=msg, candidate=candidate, context=context,
-                            input_route=safety, reviewer=self.server.output_reviewer)
+                        candidate, verdict = self.server.output_admission.generate_reviewed(
+                            lambda: self.server.model.generate(
+                                msg, data.get("style", "direct"),
+                                data.get("depth", "balanced"), context, citations),
+                            message=msg, context=context, input_route=safety,
+                            reviewer=self.server.output_reviewer)
                         if verdict == "allow":
                             reply, mode = candidate, "model"
                             self.server.model_responded = True

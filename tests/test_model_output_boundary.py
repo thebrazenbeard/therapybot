@@ -8,13 +8,16 @@ these tests now require them to remain quarantined by default.
 import json
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest import mock
 
 from therapybot.app import create_server
+from therapybot.output_review import ReviewAdmission
 
 
 class UntrustedLocalModel(BaseHTTPRequestHandler):
@@ -252,6 +255,107 @@ class ModelOutputBoundaryCharacterization(unittest.TestCase):
         self.assertNotIn(self.model.reply, json.dumps(result))
         self.assertEqual([], self.server.vault.list("chat"))
 
+    def test_hung_reviewer_is_bounded_and_late_allow_cannot_leak(self):
+        status, unlocked = self.request(
+            "/api/unlock", "POST", {"passphrase": "synthetic-review-admission-passphrase"}, self.csrf)
+        self.assertEqual(200, status)
+        saved_headers = {**self.csrf, "X-TherapyBot-Session": unlocked["session"]}
+        self.model.reply = "SYNTHETIC_LATE_ALLOW_CANDIDATE_CANARY"
+        reviewer_entered = threading.Event()
+        release_reviewer = threading.Event()
+        gate_lock = threading.Lock()
+        entered = []
+        results, errors = {}, {}
+
+        def nonreturning_reviewer(**kwargs):
+            with gate_lock:
+                entered.append(1)
+                if len(entered) >= 2:
+                    reviewer_entered.set()
+            release_reviewer.wait()
+            return "allow"  # A late allow is never authority after timeout.
+
+        self.server.output_reviewer = nonreturning_reviewer
+
+        def send(name, headers, save):
+            try:
+                results[name] = self.request("/api/chat", "POST", {
+                    "message": f"Synthetic ordinary question {name}", "save": save}, headers)
+            except Exception as exc:
+                errors[name] = repr(exc)
+
+        workers = [
+            threading.Thread(target=send, args=("a", saved_headers, True), daemon=True),
+            threading.Thread(target=send, args=("b", self.csrf, False), daemon=True),
+        ]
+        third = threading.Thread(target=send, args=("c", self.csrf, False), daemon=True)
+        fourth = threading.Thread(target=send, args=("d", self.csrf, False), daemon=True)
+        quick_third, returned_before_release, quick_after_timeout = False, False, False
+        try:
+            for worker in workers:
+                worker.start()
+            self.assertTrue(reviewer_entered.wait(timeout=3), "Two callbacks should enter")
+            third.start()
+            third.join(timeout=1.25)
+            quick_third = not third.is_alive()
+            calls_before_release = self.model.calls
+            status_during, _ = self.request("/api/status")
+            for worker in workers:
+                worker.join(timeout=3.5)
+            returned_before_release = all(not worker.is_alive() for worker in workers)
+            fourth.start()  # Both HTTP waiters timed out, callbacks remain hung.
+            fourth.join(timeout=1.25)
+            quick_after_timeout = not fourth.is_alive()
+            calls_after_timeout = self.model.calls
+        finally:
+            release_reviewer.set()
+            for worker in [*workers, third, fourth]:
+                if worker.ident is not None:
+                    worker.join(timeout=5)
+
+        self.assertTrue(quick_third, "Saturated admission must not wait on another hung reviewer")
+        self.assertTrue(returned_before_release, "Reviewer wait must have a bounded deadline")
+        self.assertTrue(quick_after_timeout, "Timed-out callbacks must still hold their slots")
+        self.assertEqual(2, calls_after_timeout, "Fourth request must also skip inference")
+        self.assertEqual(2, calls_before_release, "Third request must skip model inference")
+        self.assertEqual(2, len(entered), "No third callback should start while both slots are held")
+        self.assertEqual(200, status_during, "Unrelated status must remain responsive")
+        self.assertEqual({}, errors)
+        for status, response in results.values():
+            self.assertEqual(200, status)
+            self.assertEqual("review_hold", response["mode"])
+            self.assertEqual("quarantined", response["output_review"])
+            self.assertFalse(response["saved"])
+            self.assertNotIn("SYNTHETIC_LATE_ALLOW_CANDIDATE_CANARY", json.dumps(response))
+        self.assertEqual({"a", "b", "c", "d"}, set(results))
+        self.assertEqual([], self.server.vault.list("chat"), "Late allow must never write to vault")
+
+        self.server.output_reviewer = lambda **kwargs: "allow"
+        recovered = None
+        for _ in range(20):
+            recovered = self.chat("Synthetic recovery question")
+            if recovered[1]["mode"] == "model":
+                break
+            time.sleep(0.05)
+        self.assertEqual(200, recovered[0])
+        self.assertEqual("model", recovered[1]["mode"])
+
+    def test_thread_start_failure_fails_closed_and_releases_slot(self):
+        admission = ReviewAdmission(capacity=1, timeout=0.1)
+        kwargs = {"message": "synthetic", "context": [], "input_route": "normal",
+                  "reviewer": lambda **kwargs: "allow"}
+        with mock.patch("therapybot.output_review.threading.Thread",
+                        side_effect=RuntimeError("SYNTHETIC_START_FAILURE_CANARY")):
+            candidate, verdict = admission.generate_reviewed(
+                lambda: "SYNTHETIC_UNREVIEWED_CANARY", **kwargs)
+        self.assertIsNone(candidate)
+        self.assertEqual("unknown", verdict)
+        # A failed start did not strand the only reviewer slot.
+        candidate, verdict = admission.generate_reviewed(
+            lambda: "SYNTHETIC_BENIGN_AFTER_START_FAILURE", **kwargs)
+        self.assertEqual("allow", verdict)
+        self.assertEqual("SYNTHETIC_BENIGN_AFTER_START_FAILURE", candidate)
+
     def test_model_failure_returns_local_503_without_cloud_fallback(self):
         self.server.output_reviewer = lambda **kwargs: 'allow'
         self.model.fail = True
@@ -259,6 +363,12 @@ class ModelOutputBoundaryCharacterization(unittest.TestCase):
         self.assertEqual(503, status)
         self.assertIn("no cloud fallback", result["error"].lower())
         self.assertEqual(0, self.server.vault.db.execute("SELECT COUNT(*) FROM records").fetchone()[0])
+        # A failed generator must return its admission slot; the next
+        # synthetic successful request remains possible.
+        self.model.fail = False
+        status, result = self.chat("Synthetic recovered local-model question")
+        self.assertEqual(200, status)
+        self.assertEqual("model", result["mode"])
 
 
 if __name__ == "__main__":
