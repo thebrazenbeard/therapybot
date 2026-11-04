@@ -25,6 +25,9 @@ _STOP = frozenset({
     "with", "would", "you", "your",
 })
 _SHORT_CLINICAL = frozenset({"ai", "act", "cbt", "dbt", "ocd", "ptsd", "emdr", "adhd"})
+_PROVENANCE_TEXT = ("model_training_rights", "authors", "verification_method",
+                    "publication_date_precision", "section_anchor", "source_license")
+_PROVENANCE_FLAGS = ("source_content_included",)
 # Recognizable role delimiters and direct attempts to override instructions
 # are grounds to drop a source record, not to obey it. This is defense-in-depth,
 # NOT a comprehensive LLM prompt-injection defense.
@@ -61,7 +64,25 @@ def _usable(record):
     if url.scheme != "https" or not url.hostname or url.username or url.password:
         return False
     searchable_text = "\n".join((record["title"], record["summary"], *record["topics"]))
-    return _PROMPT_ATTACK.search(searchable_text) is None
+    if _PROMPT_ATTACK.search(searchable_text):
+        return False
+    # These fields may become visible to local retrieval or future adapters.
+    # Never use source metadata as a grant of training or redistribution rights.
+    for key in _PROVENANCE_TEXT:
+        value = record.get(key)
+        if value is None and key == "section_anchor":
+            continue
+        if key in record and (not isinstance(value, str) or len(value) > 1000 or
+                              any(ord(ch) < 32 or ord(ch) == 127 for ch in value) or
+                              _PROMPT_ATTACK.search(value)):
+            return False
+    if ("model_training_rights" in record and
+            record["model_training_rights"] != "not-cleared"):
+        return False
+    if ("source_content_included" in record and
+            record["source_content_included"] is not False):
+        return False
+    return True
 
 
 def _load(path):
@@ -73,8 +94,8 @@ def _load(path):
 
 def sources():
     items = []
-    ids = set()
-    urls = set()
+    by_id = {}
+    by_url = {}
     registers = [_load(SOURCES_PATH)]
     if RESEARCH_PATH.is_file():
         # Only checked-in source metadata/original summaries, never private
@@ -86,10 +107,21 @@ def sources():
                 continue
             sid = item["id"].casefold()
             canonical_url = item["url"].rstrip("/").casefold()
-            if sid not in ids and canonical_url not in urls:
+            existing = by_url.get(canonical_url)
+            if existing is not None and (sid not in by_id or by_id[sid] is existing):
+                # Keep the short curated title, original synopsis and stable ID,
+                # but do not silently lose richer research provenance when the
+                # same public source URL appears under a research alias.
+                for key in (*_PROVENANCE_TEXT, *_PROVENANCE_FLAGS):
+                    if key in item and existing.get(key) is None:
+                        existing[key] = item[key]
+            elif sid not in by_id and existing is None:
                 items.append(item)
-                ids.add(sid)
-                urls.add(canonical_url)
+                by_id[sid] = item
+                by_url[canonical_url] = item
+    for item in items:
+        # No rights assertion in a short curated entry is not permission.
+        item.setdefault("model_training_rights", "not-cleared")
     return items
 
 
