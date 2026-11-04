@@ -1,0 +1,20 @@
+# Hostile review and remediation — 2026-11-04
+
+Independent read-only specialist waves examined the original README-only repository, then the live application tree. Reviewers had no authority to edit code; the integration owner made and re-tested fixes. These findings are synthetic tests and source inspection, **not independent clinical certification**.
+
+| Finding | Observed evidence | Disposition |
+| --- | --- | --- |
+| Existing parent directory permissions changed to `0700` | Isolated Linux reproduction changed an unrelated `0755` directory | Fixed: never chmod existing parent; configured vault file restricted to `0600` on Unix |
+| Unauthenticated localhost client could read decrypted records | HTTP 200 without session after another client unlocked | Fixed: separate unlock-issued session token required for private reads, writes, backup and deletion; 403 regression checks |
+| Single page request token could authorize record deletion | Public local HTML contained global mutation token | Fixed: mutation token alone insufficient; unlock session and explicit DELETE confirmation required |
+| Safety classifier overrode active danger with negation/hypothetical language | Initial independent 48-case red team: 29 mismatches; fresh holdouts continued to expose misses | Rules revised and synthetic regressions added. **Still not clinically validated**; possible false positives/negatives and unsafe model outputs remain |
+| Local model readiness based on raw TCP listener | Dummy non-model TCP listener yielded ready status | Fixed: status distinguishes endpoint reachability from an observed valid model reply in this server process |
+| Model URL query secret echoed in public status | Synthetic token in endpoint query appeared in status | Fixed: query parameters rejected in model configuration |
+| Model/user text could become active HTML | Source-level UI review sought XSS sinks | UI uses text nodes, restricts links to HTTP(S), and disables client storage; browser E2E still outstanding |
+| Locked vault left visible private text and stale replies | Source-level UI inspection | Fixed: clear-chat, lock-time DOM/draft clearing and stale async reply suppression |
+| External evidence register represented 24 IDs as independent sources | Independent source audit found 20 distinct URLs and bibliographic inaccuracies | URL deduplication added; DBT BPD and UK cohort titles/populations corrected; research still not claim-anchored |
+| Unseen safety holdouts produced six false negatives and one false positive | Independent 10-case blind holdout: initial 3/10 exact routing | Added held-out regression scenarios and revised cues; targeted test passes, **but no proven generalization or medical assessment** |
+| Research examples cited sources that did not support the specific guidance | ACT pointed to generic NIMH psychotherapy page; DBT skill pointed to a BPD outcome review; machine consciousness pointed to psychosis resource | Added ACT model paper, DBT source manual metadata and philosophical SEP reference; corrected examples and preserved third-party training rights as not-cleared |
+| Research example implied severely sleep-deprived driving might be acceptable at lower speed | Independent rights/content audit | Corrected to advise not driving; separate historical question now receives a substantive historical answer |
+
+Residual high-stakes limits: keyword-based safety cues are not professional risk assessment; model completions are not formally screened for clinical advice; the linked source summaries are not fully claim-specific verification; source full-text training rights remain uncleared; backup restore, full memory/profile controls, real Qwen inference and browser E2E are not yet proven. Unlock-attempt rate limiting, Windows ACL audit, stricter CSP, separate local-model prompt-retention audit and professional penetration testing also remain. README claims should not exceed those limits.

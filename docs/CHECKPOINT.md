@@ -1,0 +1,16 @@
+# TherapyBot execution checkpoint
+
+Starting GitHub `main` on 2026-11-04: `3cc1d662e1b9a1218f2360935cd90af198ab6cef`, README only. No open issues or PRs returned at initial inspection. GitHub plugin read/write permission confirmed. Lappy, VERA-NODE-1, VN2 connected to Executor. Lappy Git 2.55, Python launcher 3.14.5 and RTX 3050 laptop GPU detected; `python.exe` bare command denied, `py -3` worked. No inference listener at `127.0.0.1:5001` or `8080` when probed. These are independent evidence types, not local-model success.
+
+Read-only runtime review later located `llama-server.exe` and a candidate GGUF at `D:\VERA\models\gguf\vera-qwen35-4b-q4-k-m-candidate-20261029\Qwen3.5-4B-Q4_K_M.gguf` (2,707,513,696 bytes). Ollama is listening on port 11434 with installed trial models, but `ollama ps` showed none loaded. Lappy had 12 logical CPUs, ~34 GB RAM (~6.83 GB free) and RTX 3050 4 GB with ~3.33 GB VRAM already occupied by other workloads. To avoid disrupting ongoing Blender/PreActive work, no actual model inference was started. The application is coded to reach local models, but its real-GGUF path is NOT yet verified on Lappy.
+
+Current integration evidence, before publication:
+
+- 15 Python `unittest` cases passed, including encrypted-vault/backup/delete, actual new-connection reopen, existing directory permission preservation, HTTP sessions and CSRF, local-only model URL restrictions, mock KoboldCPP response, synthetic crisis fixtures and source retrieval.
+- `python scripts/validate_research.py` passed: 22 researched metadata records plus 30 original synthetic examples split train/dev/eval 18/6/6. Combined local retrieval returns 23 distinct reference URLs after deduplication.
+- Python `compileall` and extracted UI JavaScript `node --check` passed. HTML entrypoint served HTTP 200 in isolated scratch runtime. Cloud browser could not reach the scratch loopback server; no actual browser interaction was verified.
+- Independent review found and drove fixes for inadvertent parent-directory chmod, unauthenticated plaintext record reads, stale UI content after lock, output rendering safety, misleading TCP model status and model URL-query secret display.
+- Fresh blind clinical-behavior review found 7 safety-routing misses out of 10 unseen examples (six false negatives, one false positive); those seven were added as regression cases and corrected. A tiny fixed red-team set is **not** clinical validation. Source audit found wrong example citations; three source entries and five examples were corrected.
+- Local inference via installed Qwen GGUF remains untested because current Lappy GPU/headroom was occupied by Blender/PreActive. **No first-release clinical safety or runtime-performance gate is met.**
+
+Exact post-publication Git SHA and CI result must be retrieved from live GitHub. No clinical qualification or public launch assertion is made.
