@@ -135,6 +135,10 @@
   const URGENT = 'I cannot assess danger from a chat message. If someone may be in immediate danger, contact local emergency services now. In the U.S., you can call or text 988 for crisis support. If this describes the past, a hypothetical, or someone else, you can clarify; I will not silently assume otherwise.';
   const CONCERN = 'I want to take that seriously without deciding what you meant. Are you describing a current concern, a past experience, or a hypothetical question?';
   const LANGUAGE_LIMIT = 'This experimental version currently supports English only. Your message may use another language. I cannot reliably understand it or check it for safety. If someone may be in immediate danger, contact local emergency services. You can try describing the situation in English if you choose; I will not guess what you meant.';
+  const PHYSICAL_URGENT = 'This could describe an immediate physical emergency. I cannot assess it over chat. If anyone may be in danger, contact local emergency services now (911 in the U.S.). Do not wait for this conversation to determine what is happening. If this is historical, fictional, or already resolved, you can clarify.';
+  const POSSIBLE_POISONING = 'This could involve poisoning or a medication emergency, which I cannot assess over chat. If someone is unconscious, having trouble breathing, or in immediate danger, call local emergency services now (911 in the U.S.). In the U.S., Poison Help is available at 1-800-222-1222. Do not wait for this conversation to decide whether to seek help.';
+  const DROWSY_DRIVING = 'If you are currently driving and struggling to stay awake, stop driving as soon as you can safely do so and seek immediate help. I cannot assess your safety from chat. If you or anyone else is in immediate danger, call local emergency services. You can clarify if this was in the past or hypothetical.';
+  const CHILD_PROTECTION = 'If a child may be experiencing sexual harm, their protection matters. I cannot verify what happened from a message. If the child is in immediate danger, contact local emergency services; otherwise consider a trusted local child-protection service or qualified professional. You do not need to resolve every uncertainty in this chat to seek help.';
 
   function clean(value, limit) {
     return typeof value === 'string' ? value.slice(0, limit).normalize('NFKC').replace(/[\u2018\u2019]/g, "'").toLowerCase() : '';
@@ -174,6 +178,78 @@
       'estoy (?:muy )?(?:triste|asustad[oa]|deprimid[oa])', 'no puedo'
     ];
     return spanishMarkers.filter(bounded).length >= 2;
+  }
+
+  // Cautious hazard-first preflight for a few *literal* physical hazards missed
+  // by the narrow self-harm lexicon. It is NOT an emergency classifier; a miss
+  // must never be represented to the user as evidence of safety. Conditions
+  // combine independent cues, with locally scoped fictional/resolved controls.
+  function isObviousBreathingMetaphor(clause) {
+    return /\b(?:comedy|movie|film|plot twist|joke|comedian)\b/.test(clause) &&
+      /\b(?:laugh(?:ed|ing)?|hilarious|funniest|funny)\b/.test(clause) &&
+      !/\b(?:wheezing|blue lips|throat swelling|allergic|unconscious|unresponsive)\b/.test(clause);
+  }
+
+  function hazardPreflight(message) {
+    const text = clean(message, 8000);
+    const historicalAndResolved = /\b(?:years ago|last year|back in \d{4}|in \d{4}|used to|in the past|previously|yesterday)\b/.test(text) &&
+      /\b(?:safe now|fine now|well now|not anymore|no longer|resolved|treated|fully recovered|no current symptoms)\b/.test(text);
+    const clauses = text.split(/(?<=[.!?;])\s+|\s*;\s*|\s*,?\s+but\s+(?=(?:now|today|currently|i|we|my|our)\b)/);
+    let concern = null;
+    for (const clause of clauses) {
+      const fictional = /\b(?:in (?:my|a|the) (?:novel|fiction|screenplay|book|movie|film)|in this (?:movie|film|book)|fictional|hypothetical|movie depicts|novel depicts|for (?:a|my) (?:class|lesson|report|training)|researching|explain .*\b(?:for a|for my) (?:class|report|course|training)|safety training|on (?:a|the) movie set|scripted scene|training slideshow|training dummy)\b/.test(clause);
+      const resolved = /\b(?:years ago|last year|back in \d{4}|in \d{4}|used to|in the past|previously|yesterday)\b/.test(clause) &&
+        /\b(?:safe now|fine now|well now|not anymore|no longer|resolved|treated|fully recovered|no current symptoms)\b/.test(clause);
+      if (fictional || resolved ||
+        (historicalAndResolved && /\b(?:years ago|last year|back in \d{4}|in \d{4}|used to|in the past|previously|yesterday)\b/.test(clause))) continue;
+      const has = pattern => pattern.test(clause);
+      const breathing = !isObviousBreathingMetaphor(clause) &&
+        !has(/\b(?:not struggling for air|no breathing difficulty|can breathe normally|breathing normally now|not wheezing)\b/) &&
+        has(/\b(?:struggling (?:to breathe|for air)|gasping for (?:air|breath)|having (?:trouble|difficulty) breathing|trouble breathing|(?:can'?t|cannot|unable to) (?:breathe|catch (?:my|his|her|their|our) breath)|throat (?:is )?(?:closing|swelling)|wheez(?:e|es|ing))\b/) &&
+        has(/\b(?:struggling|gasping|trouble|difficulty|unable|cannot|can't|swelling|closing|blue|turning blue|allergic|suffocat|chok)\b/);
+      const unresponsive = !has(/\b(?:not unconscious|not unresponsive|is awake|are awake|woke up|fully awake|responding normally)\b/) &&
+        has(/\b(?:unresponsive|unconscious|not waking up|won't wake up|can't wake|cannot wake|not responding|not moving|passed out)\b/) &&
+        has(/\b(?:person|child|baby|someone|friend|relative|cousin|roommate|spouse|partner|he|she|they|him|her|his|their|lips|breath|shake|swallow|tablet|pill|medicine|medication|shoulder)\b/);
+      const medication = !has(/\b(?:did not|didn't|never)\s+(?:take|swallow|ingest|consume)\b/) &&
+        !(has(/\b(?:as prescribed|as directed|per prescription|usual dose|normal dose)\b/) && !has(/\b(?:accidentally|too many|overdose|extra|wrong)\b/)) &&
+        has(/\b(?:double|doubled|twice|extra|overdos(?:e|ed)|too many|wrong)\b.{0,70}\b(?:dose|medication|medicine|pills?|tablets?|capsules?)\b|\b(?:medication|medicine|pills?|tablets?|capsules?)\b.{0,55}\b(?:double|twice|extra|overdose|too many)\b/) &&
+        has(/\b(?:i|we|my|our|he|she|they|someone|friend|child|took|swallowed|accidentally)\b/);
+      const smoke = has(/\b(?:smoke|flames|fire)\b/) &&
+        has(/\b(?:filling|trapped|blocked|can't get out|cannot get out|thick|engulfed|room|bedroom|house|apartment|building|vehicle)\b/) &&
+        has(/\b(?:filling|trapped|blocked|can't get out|cannot get out|thick|engulfed)\b/);
+      const unsafeHeight = has(/\b(?:bridge|overpass|roof|ledge|cliff|parking garage|high building)\b/) &&
+        has(/\b(?:outside|beyond|over|other side of|past)\b.{0,35}\b(?:barrier|guardrail|railing|edge)\b|\b(?:barrier|guardrail|railing|edge)\b.{0,35}\b(?:outside|beyond|over|other side of|past)\b|\b(?:on|at) (?:the )?(?:outer )?(?:edge|ledge)\b/) &&
+        has(/\b(?:climb(?:ed|ing)?|stand(?:ing)?|step(?:ped)?|perch(?:ed|ing)?|sit(?:ting)?|goodbye|farewell|about to|lean(?:ing)?|jump)\b/);
+      const armedThreat = has(/\b(?:gun|handgun|firearm|rifle|pistol|shotgun|weapon)\b/) &&
+        has(/\b(?:aim(?:s|ed|ing)?|point(?:s|ed|ing)?|brandish(?:ing|ed)?|threaten(?:s|ed|ing)?)\b/) &&
+        has(/\b(?:at|toward|towards)\b.{0,50}\b(?:(?:my|our|the|his|her|their)\s+)?(?:person|people|workers?|students?|children|class|crowd|someone|anyone|me|us|them|him|her|sister|brother|mother|father|partner|spouse|wife|husband|coworker|colleague)\b/);
+      const asleepDriving = !has(/\b(?:not falling asleep|not nodding off|not dozing off|fully awake while driving)\b/) &&
+        has(/\b(?:driv(?:e|es|ing)|behind the wheel|at the wheel)\b/) &&
+        has(/\b(?:doz(?:e|es|ing) off|nod(?:s|ding)? off|fall(?:ing)? asleep|can't stay awake|cannot stay awake|can't keep (?:my|our) eyes open|sleepy at the wheel)\b/);
+      const trappedStrangulation = has(/\b(?:partner|spouse|wife|husband|boyfriend|girlfriend|ex|roommate|someone|person)\b/) &&
+        has(/\b(?:hand(?:s)? around (?:my|his|her|their) neck|chok(?:e|es|ed|ing)|strangl(?:e|es|ed|ing)|grabb(?:ed|ing)? (?:my|his|her|their) throat)\b/) &&
+        has(/\b(?:won't let|will not let|can't leave|cannot leave|trapped|pinned|blocking|blocked|right now|tonight|today|currently)\b/);
+      const generatorFumes = has(/\b(?:generator|engine|vehicle|car)\b/) &&
+        has(/\b(?:enclosed|closed|shut|garage|indoors|inside)\b/) &&
+        has(/\b(?:dizz(?:y|iness)|nausea|nauseous|sick|headache|faint|sleepy|vomit|unconscious|unresponsive|carbon monoxide|exhaust)\b/);
+      const eyeChemical = has(/\b(?:chemical|caustic|acid|bleach|cleaner|cleaning liquid|solvent)\b/) &&
+        has(/\b(?:splash(?:ed|es|ing)?|spill(?:ed|ing)?|spray(?:ed|ing)?|went|got)\b/) &&
+        has(/\b(?:eye|eyes|face)\b/);
+      const electric = has(/\b(?:power line|electrical cable|live wire|exposed wire|high voltage)\b/) &&
+        has(/\b(?:touch(?:ed|es|ing)?|contact|shock(?:ed|ing)?|electrocuted)\b/) &&
+        has(/\b(?:unresponsive|unconscious|not moving|passed out|not waking|can't wake)\b/);
+      const childAbuse = has(/\b(?:child|children|minor|underage|kid|little sister|little brother)\b/) &&
+        has(/\b(?:sexually?|molest(?:ed|ing)?|rape|raped|grop(?:e|ed|ing)|sexual abuse|inappropriate touching)\b/) &&
+        has(/\b(?:adult|parent|uncle|aunt|relative|caregiver|teacher|suspect|afraid|frightened|scared|touch(?:ing|ed)?)\b/);
+      if (childAbuse) concern = 'child-protection';
+      if (unresponsive && has(/\b(?:pill|tablet|medication|medicine|swallowed|ingested|took)\b/)) return { route: 'urgent_review', kind: 'poisoning' };
+      if (medication) return { route: 'urgent_review', kind: 'poisoning' };
+      if (asleepDriving) return { route: 'urgent_review', kind: 'driving' };
+      if (breathing || unresponsive || smoke || unsafeHeight || armedThreat || trappedStrangulation || generatorFumes || eyeChemical || electric) {
+        return { route: 'urgent_review', kind: 'physical' };
+      }
+    }
+    return concern ? { route: 'concern', kind: concern } : null;
   }
 
   function riskRoute(message) {
@@ -220,7 +296,7 @@
       const acuteBleeding = /\b(?:bleeding (?:badly|heavily|profusely)|blood (?:is )?(?:pouring|gushing)|can't stop bleeding|cannot stop bleeding)\b/.test(clause) &&
         /\b(?:now|right now|just|already|my|me|i|child|son|daughter|partner|friend|blood)\b/.test(clause);
       const bandageSoaking = /\bblood\b.{0,50}\b(?:soak(?:ing|s)? through|saturat(?:ing|es))\b.{0,45}\b(?:towels?|bandages?|dressings?|clothes?)\b/.test(clause);
-      const acuteBreathing = /\b(?:cannot|can't|not)\s+(?:breathe|breathing)\b/.test(clause);
+      const acuteBreathing = !isObviousBreathingMetaphor(clause) && /\b(?:cannot|can't|not)\s+(?:breathe|breathing)\b/.test(clause);
       const acuteInjury = /\b(?:i (?:have )?(?:already|just)\s+)?(?:slashed|cut|stabbed)\s+my\s+(?:wrist|wrists)\b.{0,100}\b(?:bleeding|blood|won't stop|cannot stop)\b/.test(clause);
       const weaponAtSelf = /\b(?:i (?:have|am holding)|there is)\b.{0,55}\b(?:loaded\s+)?(?:gun|firearm|pistol)\b.{0,55}\b(?:pointed|aimed|against|at)\b.{0,20}\b(?:my|me)\b/.test(clause) ||
         /\b(?:gun|firearm|pistol)\b.{0,50}\b(?:pointed|aimed|against)\s+(?:at\s+)?my\s+(?:head|chest|temple)\b/.test(clause);
@@ -330,9 +406,13 @@
     return null;
   }
 
-  function sourceLinks(topic, risk, interpersonalViolence) {
+  function sourceLinks(topic, risk, interpersonalViolence, hazard) {
     const register = Array.isArray(root.TherapyBotEmbeddedCatalog) ? root.TherapyBotEmbeddedCatalog : [];
-    const ids = interpersonalViolence && risk === 'concern' ? [] : risk !== 'normal' ? ['988'] : topic ? topic.sources : [];
+    // A physical emergency is not accurately described by a lone emotional-
+    // crisis resource pointer; its primary action is in the resident reply.
+    const physicalHazard = hazard && (hazard.kind === 'physical' || hazard.kind === 'driving' || hazard.kind === 'poisoning' || hazard.kind === 'child-protection');
+    const ids = physicalHazard || (interpersonalViolence && risk === 'concern') ? [] :
+      risk !== 'normal' ? ['988'] : topic ? topic.sources : [];
     return ids.map(function (id) {
       return register.find(function (item) { return item.id === id; });
     }).filter(function (item) { return Boolean(item) && /^https:\/\//.test(item.url); })
@@ -372,8 +452,9 @@
     const style = ['direct', 'warm', 'analytical'].includes(options.style) ? options.style : 'direct';
     const interpersonalViolence = partnerViolence(message);
     const observedRisk = riskRoute(message);
-    const route = observedRisk === 'urgent_review' || unresolvedAcuteFollowup(message, history) ? 'urgent_review' :
-      interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
+    const hazard = hazardPreflight(message);
+    const route = observedRisk === 'urgent_review' || hazard?.route === 'urgent_review' || unresolvedAcuteFollowup(message, history) ? 'urgent_review' :
+      hazard?.route === 'concern' || (interpersonalViolence && observedRisk === 'normal') ? 'concern' : observedRisk;
     // English-only rule tables cannot safely interpret detected non-English
     // input. Keep known danger routes authoritative and suppress Council mode
     // by returning a non-normal route on an unsupported-language abstention.
@@ -393,8 +474,13 @@
     let uncertainty;
 
     if (route === 'urgent_review') {
-      reply = URGENT;
-      uncertainty = 'A lexical cue triggered this unvalidated caution; it cannot establish urgency or intent.';
+      reply = hazard?.kind === 'poisoning' ? POSSIBLE_POISONING :
+        hazard?.kind === 'driving' ? DROWSY_DRIVING :
+        hazard?.route === 'urgent_review' && hazard?.kind === 'physical' ? PHYSICAL_URGENT : URGENT;
+      uncertainty = 'An unvalidated literal-text cue triggered this caution; it cannot establish urgency, intent or safety.';
+    } else if (hazard?.kind === 'child-protection') {
+      reply = CHILD_PROTECTION;
+      uncertainty = 'A lexical cue prompted child-protection caution; this does not verify abuse, timing or immediate danger.';
     } else if (interpersonalViolence) {
       reply = 'Being hurt, threatened, or confined by a partner while feeling afraid is a safety concern, not simply a disagreement with two equally valid sides. I will not assume confronting them or leaving is straightforward. If there is immediate danger, local emergency services may help. Would you like to consider what could make the next few hours safer, or describe what happened without advice?';
       uncertainty = 'This is a literal-text safety cue, not an assessment of the situation or a determination of available options.';
@@ -441,7 +527,7 @@
       engine: 'embedded-semantic',
       supportedTopic: Boolean(topic && !languageLimited),
       uncertainty,
-      sources: languageLimited ? [] : sourceLinks(topic, route, interpersonalViolence),
+      sources: languageLimited ? [] : sourceLinks(topic, route, interpersonalViolence, hazard),
       state,
       safety
     };
