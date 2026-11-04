@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="TherapyBot: experimental private, local mental-health support">
+  <title>TherapyBot — Local support</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="rail" aria-label="Main navigation">
+      <div class="brand" aria-label="TherapyBot">
+        <span class="brand-mark" aria-hidden="true">✳</span>
+        <span><strong>TherapyBot</strong><small>LOCAL COMPANION</small></span>
+      </div>
+      <nav class="nav-list" aria-label="Views">
+        <button class="nav-button active" data-view="chat" aria-current="page"><span aria-hidden="true">◉</span> Conversation</button>
+        <button class="nav-button" data-view="journal"><span aria-hidden="true">▤</span> Journal</button>
+        <button class="nav-button" data-view="history"><span aria-hidden="true">◷</span> History</button>
+        <button class="nav-button" data-view="sources"><span aria-hidden="true">◈</span> Knowledge</button>
+        <button class="nav-button" data-view="privacy"><span aria-hidden="true">◇</span> Privacy</button>
+      </nav>
+      <div class="rail-bottom">
+        <div class="small-note"><span class="status-dot" aria-hidden="true"></span> No account. No cloud sync.</div>
+        <button id="lockButton" class="ghost-button" type="button" disabled>Lock vault</button>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb"><span>MY SPACE</span><span aria-hidden="true">/</span><strong id="viewBreadcrumb">Conversation</strong></div>
+        <div class="top-status"><span id="modelStatus" class="status-pill">Model: checking…</span><span id="vaultStatus" class="status-pill muted">Vault: locked</span></div>
+      </header>
+
+      <main id="mainContent">
+        <section id="view-chat" class="view active" aria-labelledby="chatHeading">
+          <div class="view-intro"><div class="eyebrow">PRIVATE CONVERSATION</div><h1 id="chatHeading">A place to think out loud.</h1><p>Explore what you're experiencing, work through a question, or simply talk. You set the direction.</p></div>
+          <div class="conversation-card">
+            <div class="conversation-toolbar">
+              <div class="agent-avatar" aria-hidden="true">✳</div>
+              <div><strong>TherapyBot</strong><div class="tiny-muted">Experimental support · Not a licensed therapist</div></div>
+              <span class="toolbar-spacer"></span>
+              <label class="compact-select">Style <select id="styleSelect"><option value="direct">Direct</option><option value="warm">Warm</option><option value="analytical">Analytical</option></select></label>
+              <label class="compact-select">Depth <select id="depthSelect"><option value="balanced">Balanced</option><option value="brief">Brief</option><option value="detailed">Detailed</option></select></label>
+            </div>
+            <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions text">
+              <div class="empty-chat"><div class="empty-icon">✧</div><h2>What’s on your mind?</h2><p>There’s no questionnaire. Start wherever you like.</p><div class="prompt-list" aria-label="Conversation suggestions"><button type="button" class="suggestion">I want to understand a pattern in my behavior.</button><button type="button" class="suggestion">Can we explore an unusual experience without jumping to conclusions?</button><button type="button" class="suggestion">Help me think through a difficult relationship.</button></div></div>
+            </div>
+            <div class="composer">
+              <label class="sr-only" for="chatInput">Your message</label>
+              <textarea id="chatInput" placeholder="Write a message…" rows="2" maxlength="8000"></textarea>
+              <div class="composer-footer"><label class="checkline"><input type="checkbox" id="saveHistory"> Save to encrypted history</label><span class="tiny-muted">Otherwise stays in this tab</span><button id="sendButton" class="primary-button" type="button">Send <span aria-hidden="true">↗</span></button></div>
+            </div>
+          </div>
+          <p class="below-note">Answers can be inaccurate. TherapyBot is not a substitute for professional care or an emergency service.</p>
+        </section>
+
+        <section id="view-journal" class="view" aria-labelledby="journalHeading" hidden>
+          <div class="view-intro"><div class="eyebrow">PERSONAL REFLECTION</div><h1 id="journalHeading">Your journal.</h1><p>A private place to record thoughts and feelings, without analysis unless you ask for it.</p></div>
+          <div class="panel"><div class="panel-head"><h2>New entry</h2><span class="tiny-muted">Encrypted after saving</span></div><label for="journalInput">What's worth recording today?</label><textarea id="journalInput" rows="9" maxlength="16000" placeholder="Start writing…"></textarea><div class="form-actions"><label for="moodInput">Mood (optional)</label><select id="moodInput"><option value="">Not specified</option><option value="0">0 · Very low</option><option value="2">2 · Low</option><option value="5">5 · Neutral</option><option value="8">8 · Good</option><option value="10">10 · Very good</option></select><span class="toolbar-spacer"></span><button id="saveJournalButton" class="primary-button" type="button">Save entry</button></div></div>
+        </section>
+
+        <section id="view-history" class="view" aria-labelledby="historyHeading" hidden>
+          <div class="view-intro"><div class="eyebrow">USER-CONTROLLED RECORDS</div><h1 id="historyHeading">Saved history.</h1><p>Search and delete only the records you've chosen to keep.</p></div>
+          <div class="panel"><div class="search-row"><label class="sr-only" for="historySearch">Search encrypted records</label><input id="historySearch" type="search" placeholder="Search your journal or saved conversation…"><button id="searchHistoryButton" class="secondary-button" type="button">Search</button></div><div id="historyResults" class="results-list" aria-live="polite"></div></div>
+        </section>
+
+        <section id="view-sources" class="view" aria-labelledby="sourcesHeading" hidden>
+          <div class="view-intro"><div class="eyebrow">EVIDENCE & CONTEXT</div><h1 id="sourcesHeading">Knowledge library.</h1><p>Small, curated original summaries linked to identifiable sources. Not a clinical treatment manual.</p></div>
+          <div class="panel"><div class="search-row"><label class="sr-only" for="sourceSearch">Search knowledge sources</label><input id="sourceSearch" type="search" placeholder="Try: CBT, social isolation, psychosis, self-harm…"><button id="searchSourcesButton" class="secondary-button" type="button">Search</button></div><div id="sourceResults" class="results-list" aria-live="polite"></div></div>
+        </section>
+
+        <section id="view-privacy" class="view" aria-labelledby="privacyHeading" hidden>
+          <div class="view-intro"><div class="eyebrow">CONTROL YOUR DATA</div><h1 id="privacyHeading">Privacy & boundaries.</h1><p>Your records are stored on this computer. You decide what to save and export.</p></div>
+          <div class="panel privacy-panel"><h2>Local vault</h2><p>Saved record bodies are encrypted with AES-256-GCM using a passphrase-derived key. Record type and timestamps are not encrypted. Malware, unlocked sessions, swap files, and exported copies are outside this protection.</p><button id="exportButton" class="secondary-button" type="button">Download plaintext JSON export</button><p class="warning-note">Exports are readable files outside the vault. Store or delete them securely. Deleting a record here does not erase independent backups or SSD remnants.</p><hr><h2>What TherapyBot does not do</h2><ul><li>No diagnosis, medication prescribing, or psychotherapy credentials.</li><li>No automated contact with crisis responders.</li><li>No mandatory external API, account, telemetry, or cloud sync.</li><li>No guarantee that a local model's output is medically accurate or safe.</li></ul></div>
+        </section>
+      </main>
+    </div>
+
+    <aside class="context-panel" aria-label="Help and current context">
+      <div class="context-heading">YOUR SPACE <span aria-hidden="true">✳</span></div>
+      <div class="context-card"><div class="eyebrow">GENTLE REMINDER</div><h2>No pressure to perform.</h2><p>You can think out loud, change topics, or disagree. You don't have to turn every conversation into an exercise.</p></div>
+      <div class="context-card source-context"><div class="eyebrow">REFERENCES</div><h3>Evidence over certainty.</h3><p>Source links are available in the Knowledge tab. A model's claims still need checking.</p><button id="openSourcesButton" class="text-button" type="button">Browse references ↗</button></div>
+      <div class="crisis-card"><strong>Need urgent human help?</strong><p>In the US, call or text <a href="tel:988">988</a>. For immediate danger, call <a href="tel:911">911</a>. Outside the US, use local services.</p><span>TherapyBot can't contact help for you.</span></div>
+    </aside>
+  </div>
+
+  <div id="unlockOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="unlockHeading">
+    <div class="unlock-card"><div class="unlock-emblem" aria-hidden="true">✳</div><div class="eyebrow">LOCAL & PRIVATE</div><h2 id="unlockHeading">Unlock your space</h2><p>Enter your vault passphrase. If this is your first visit, a new vault will be created. Use at least 12 characters, and keep it safe—there is no recovery key.</p><form id="unlockForm"><label for="passphraseInput">Vault passphrase</label><input id="passphraseInput" type="password" minlength="12" autocomplete="off" required placeholder="At least 12 characters"><button id="unlockButton" class="primary-button full" type="submit">Unlock local vault</button></form><p id="unlockError" class="error-text" role="alert"></p><p class="unlock-foot">Urgent help never requires unlocking: in the US call or text <a href="tel:988">988</a>; for immediate physical danger call <a href="tel:911">911</a>. Outside the US, contact local services. TherapyBot cannot contact them for you.</p><p class="unlock-foot">No account or cloud sync is required. Browser password managers may still offer to sync credentials; choose your browser settings. Your local model runtime has separate privacy settings.</p></div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

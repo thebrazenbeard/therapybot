@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "therapybot-local"
+version = "0.1.0"
+description = "Local-first mental-health support companion (experimental, non-clinical)"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=42,<51"]
+
+[project.scripts]
+therapybot = "therapybot.__main__:main"
+
+[tool.setuptools]
+packages = ["therapybot"]
+
+[tool.setuptools.package-data]
+therapybot = ["../web/*.html", "../web/*.js", "../web/*.css"]
