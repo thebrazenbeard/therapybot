@@ -125,11 +125,17 @@
       remove.type = 'button';
       remove.setAttribute('aria-label', 'Remove ' + member.name);
       remove.addEventListener('click', () => {
+        const removedPosition = members.findIndex((candidate) => candidate.id === member.id);
         members = members.filter((candidate) => candidate.id !== member.id);
         if (editingMemberId === member.id) resetMemberEditor();
         if (!members.length) councilSelected = false;
         renderMembers();
         updateCouncilControls();
+        // The focused Remove button no longer exists after rerendering. Move
+        // focus to the next member's Edit control, or back to Manage members.
+        const editActions = memberList.querySelectorAll('.member-card-actions button:first-child');
+        const nextEditAction = editActions[Math.min(removedPosition, editActions.length - 1)];
+        (nextEditAction || manageButton).focus();
         setMemberFeedback(member.name + ' removed from this tab. This does not erase conversation messages.');
       });
       actions.append(edit, remove);
