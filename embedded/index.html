@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="A development-only, repository-contained TherapyBot semantic conversation experiment. No accounts, servers, telemetry, or saved conversations.">
+  <meta name="description" content="A development-only TherapyBot experiment with bundled rules, no built-in telemetry or saved conversations. Optional provider behavior is unverified.">
   <title>TherapyBot · Embedded conversation lab</title>
   <link rel="stylesheet" href="style.css">
   <script defer src="catalog.js"></script>
@@ -46,7 +46,7 @@
 
         <div class="sidebar-block privacy-block">
           <div class="sidebar-heading"><span class="sidebar-icon" aria-hidden="true">02</span> Your privacy</div>
-          <p>No telemetry or conversation uploads. The page loads its own app files; messages and Council profiles stay in page memory, with no app-managed persistent storage. Use Forget all to erase them before leaving.</p>
+          <p>The bundled page code has no telemetry or conversation-upload path. By default, messages and Council profiles stay in this tab's memory; the page does not deliberately save them to its own storage. Network activity, uploads, or logging by optional or substituted providers and the browser environment have not been independently verified. Use Forget all to clear this page's memory before leaving.</p>
           <p class="small-note">Source links open external websites only if you choose to click them.</p>
         </div>
 
@@ -56,11 +56,11 @@
       <main id="main" class="main-content">
         <div class="main-heading">
           <div>
-            <div class="eyebrow eyebrow--accent"><span class="live-dot" aria-hidden="true"></span> LOCAL EXPERIMENT · NO EXTERNAL INFERENCE</div>
+            <div class="eyebrow eyebrow--accent"><span class="live-dot" aria-hidden="true"></span> BUNDLED RULES-ONLY DEMO</div>
             <h1>Make some <em>room</em> to think.</h1>
             <p class="lead">Explore a situation at your own pace. This early engine can follow a few structured topics and ask grounded questions; it cannot replace a person or professional care.</p>
           </div>
-          <div class="engine-card"><span class="engine-label">ACTIVE ENGINE</span><span id="engine-status" class="engine-status" role="status" aria-live="polite">Checking bundled engine…</span><span class="engine-subtitle">No separate model server</span></div>
+          <div class="engine-card"><span class="engine-label">ACTIVE ENGINE</span><span id="engine-status" class="engine-status" role="status" aria-live="polite">Checking bundled rules…</span><span class="engine-subtitle">No neural inference is active in this build</span></div>
         </div>
 
         <section id="immediate-help" class="safety-alert" aria-labelledby="emergency-title" tabindex="-1">
@@ -81,7 +81,7 @@
         <section class="chat-card" aria-labelledby="conversation-title">
           <div class="chat-header">
             <div><span class="eyebrow">CONVERSATION</span><h2 id="conversation-title">A place to examine a thought.</h2></div>
-            <div class="chat-header-actions"><span class="status-chip"><span class="chip-dot" aria-hidden="true"></span> Unsaved · tab memory only</span><button id="clear-chat" type="button" class="text-button">Clear chat</button><button id="clear-all" type="button" class="text-button">Forget all</button></div>
+            <div class="chat-header-actions"><span class="status-chip"><span class="chip-dot" aria-hidden="true"></span> Page memory · unsaved here</span><button id="clear-chat" type="button" class="text-button">Clear chat</button><button id="clear-all" type="button" class="text-button">Forget all</button></div>
           </div>
 
           <div class="council-toolbar" aria-label="Inner Council controls">
@@ -98,7 +98,7 @@
           <section id="council-setup" class="council-setup" aria-label="Define my Inner Council" hidden>
             <div class="council-setup-heading">
               <h3>Give your perspectives a voice.</h3>
-              <p>Choose the names and roles yourself. These are optional reflection perspectives, not diagnoses or independent clinical authorities. No profiles leave this tab or persist after refresh.</p>
+              <p>Choose the names and roles yourself. These are optional reflection perspectives, not diagnoses or independent clinical authorities. The bundled page keeps profiles in tab memory and clears them on refresh; substituted provider behavior is unverified.</p>
             </div>
             <div id="member-form" role="group" aria-label="Council member details">
               <div class="member-fields">
