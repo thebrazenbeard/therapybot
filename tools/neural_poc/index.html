@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self'; connect-src 'self' https://huggingface.co https://us.aws.cdn.hf.co; base-uri 'none'; form-action 'none'; object-src 'none'; img-src 'none'">
+  <title>TherapyBot isolated browser neural proof</title>
+  <link rel="stylesheet" href="./probe.css">
+</head>
+<body>
+  <main>
+    <h1>Private browser-model experiment</h1>
+    <p class="warning">Experimental and unqualified. Not therapy or crisis assessment. Use synthetic test prompts only.</p>
+    <p>No model is loaded or downloaded on page open. Every model download requires an explicit choice and consent. No GGUF model is cached by this page.</p>
+    <p>Local Wllama v3.8.1 (WASM/worker) is self-hosted for this isolated test. CPU one thread, no GPU required. Smaller models prove mechanics, not dependable counseling.</p>
+    <label for="model">Choose an experimental local model</label>
+    <select id="model">
+      <option value="smol" selected>SmolLM2 135M Instruct — 105 MB (smaller)</option>
+      <option value="qwen">Qwen3 0.6B — 397 MB (large memory demand)</option>
+    </select>
+    <p id="model-info" aria-live="polite"></p>
+    <label><input type="checkbox" id="consent"> <span id="consent-copy">I consent to the selected model download.</span></label>
+    <div class="controls">
+      <button type="button" id="preflight">Test only 32-byte model header/CORS</button>
+      <button type="button" id="download" disabled>Download, verify SHA-256, load locally</button>
+    </div>
+    <label for="file">Alternatively choose a previously verified GGUF for the selected model (no website download)</label>
+    <input id="file" type="file" accept=".gguf">
+    <button type="button" id="load-file" disabled>Load selected file locally</button>
+    <button type="button" id="cancel">Cancel network transfer (not model load)</button>
+    <pre id="status" aria-live="polite">Idle. No model loaded.</pre>
+    <form id="chat">
+      <label for="prompt">Synthetic prompt (no sensitive information)</label>
+      <textarea id="prompt" rows="4" maxlength="800" disabled>What are two practical questions to ask before accepting a new work shift?</textarea>
+      <button type="submit" id="generate" disabled>Generate locally</button>
+    </form>
+    <pre id="reply" aria-live="polite"></pre>
+    <p class="warning">A genuine model reply proves local inference mechanics on this device only. No therapeutic reliability, safety triage, or privacy beyond the observed network path is established.</p>
+  </main>
+  <script type="module" src="./probe.js"></script>
+</body>
+</html>
