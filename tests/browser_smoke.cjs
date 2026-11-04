@@ -223,6 +223,33 @@ async function run() {
       await screenshot(page, artifactDir, '01-empty.png');
     });
 
+    await test('Emergency contacts remain available without JavaScript', async () => {
+      const disabled = await browser.newPage();
+      try {
+        await disabled.setJavaScriptEnabled(false);
+        await disabled.goto(origin + '/', { waitUntil: 'load', timeout: 20000 });
+        const panel = await disabled.evaluate(() => {
+          const section = document.querySelector('#immediate-help');
+          return {
+            label: section?.querySelector('#emergency-title')?.textContent || '',
+            links: [...(section?.querySelectorAll('a') || [])].map((link) => link.getAttribute('href')),
+            visible: section ? getComputedStyle(section).display !== 'none' : false,
+            shortcut: document.querySelector('.emergency-shortcut a')?.getAttribute('href') || '',
+          };
+        });
+        assert.match(panel.label, /Need urgent help/i);
+        assert.equal(panel.visible, true);
+        assert(panel.links.includes('tel:911'));
+        assert(panel.links.includes('tel:18002221222'));
+        assert(panel.links.includes('tel:988'));
+        assert.equal(panel.shortcut, '#immediate-help');
+        await disabled.click('.emergency-shortcut a');
+        assert.equal(new URL(disabled.url()).hash, '#immediate-help');
+      } finally {
+        await disabled.close();
+      }
+    });
+
     await test('Convene without members prompts authorship, not invented people', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#council-setup', (element) => element.hidden), false);

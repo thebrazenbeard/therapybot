@@ -63,10 +63,19 @@
           <div class="engine-card"><span class="engine-label">ACTIVE ENGINE</span><span id="engine-status" class="engine-status" role="status" aria-live="polite">Checking bundled engine…</span><span class="engine-subtitle">No separate model server</span></div>
         </div>
 
-        <div class="safety-alert" aria-label="Immediate help information">
+        <section id="immediate-help" class="safety-alert" aria-labelledby="emergency-title" tabindex="-1">
           <span class="safety-icon" aria-hidden="true">!</span>
-          <p><strong>Need urgent help?</strong> This prototype cannot reliably identify emergencies or provide crisis care. If there is immediate danger, contact local emergency services. In the United States, <a href="https://988lifeline.org/get-help/" target="_blank" rel="noopener noreferrer">call or text 988</a>.</p>
-        </div>
+          <div class="safety-content">
+            <h2 id="emergency-title">Need urgent help?</h2>
+            <p>This prototype cannot reliably identify emergencies or provide crisis care. These contacts are available whether or not its text rules notice a problem; nothing is contacted automatically.</p>
+            <ul class="emergency-options">
+              <li><strong>Medical emergency</strong><span>In the U.S., <a href="tel:911">call 911</a> if someone is in immediate danger, cannot breathe, or cannot be awakened.</span></li>
+              <li><strong>Possible poisoning</strong><span>In the U.S., <a href="tel:18002221222">call Poison Help: 1-800-222-1222</a> promptly; do not wait for symptoms. <a href="https://poisonhelp.hrsa.gov/what-you-can-do" target="_blank" rel="noopener noreferrer">Official guidance</a>.</span></li>
+              <li><strong>Emotional crisis</strong><span>In the U.S., <a href="tel:988">call 988</a> or text 988 for crisis support; suicidal thoughts are not required. <a href="https://988lifeline.org/get-help/" target="_blank" rel="noopener noreferrer">988 Lifeline details</a>.</span></li>
+            </ul>
+            <p class="safety-abroad">Outside the U.S., contact your local emergency services or appropriate local crisis or poison center. The phone links work only if you choose to activate them.</p>
+          </div>
+        </section>
         <noscript><p class="no-script">JavaScript is required for the bundled conversation engine. This page does not submit messages to a remote service.</p></noscript>
 
         <section class="chat-card" aria-labelledby="conversation-title">
@@ -138,6 +147,7 @@
                 <button id="send-message" type="button" class="send-button">Send <span aria-hidden="true">↗</span></button>
               </div>
               <p class="message-hint" id="message-hint">Send or press Ctrl/⌘ + Enter. Try <code>Council:</code>, <code>Solo &lt;name&gt;:</code>, <code>Integrate:</code>, or <code>Containment:</code>. All modes are experimental; nothing is saved.</p>
+              <p class="emergency-shortcut"><a href="#immediate-help">Emergency help and poison resources</a> are available without the conversation engine.</p>
               <div id="form-feedback" class="form-feedback" role="status" aria-live="polite"></div>
             </div>
           </div>
