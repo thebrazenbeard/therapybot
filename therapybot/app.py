@@ -5,6 +5,7 @@ import os
 import secrets
 import socket
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 from . import __version__
 from .knowledge import search as source_search, sources
 from .model import ModelClient, ModelError
+from .output_review import REVIEW_HOLD_REPLY, ReviewAdmission
 from .safety import CONCERN_PREFIX, IMMEDIATE_RESPONSE, classify
 from .storage import Vault, VaultError
 
@@ -41,6 +43,9 @@ MAX_BODY = 48_000
 # including an authorized plaintext journal/history response. Requests can be
 # retried after restoring a responsive local client.
 HTTP_WRITE_TIMEOUT_SECONDS = 2.0
+# A loopback client can declare a valid Content-Length then stall or trickle.
+# Bound total transfer time, not the gap between successive socket reads.
+HTTP_BODY_READ_TIMEOUT_SECONDS = 4.0
 
 
 class ResponseDeliveryError(OSError):
@@ -50,15 +55,21 @@ class ResponseDeliveryError(OSError):
     """
 
 
+class RequestBodyDeadlineExceeded(TimeoutError):
+    """A declared request body failed to arrive before its total deadline."""
+
+
 class AppServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, vault, model):
+    def __init__(self, address, vault, model, output_reviewer=None):
         if address[0] != "127.0.0.1":
             raise ValueError("TherapyBot only binds to 127.0.0.1")
         self.vault = vault
         self.model = model
+        self.output_reviewer = output_reviewer
+        self.output_admission = ReviewAdmission()
         self.csrf = secrets.token_urlsafe(32)
         self.session = None  # Issued only after a correct vault passphrase.
         # Protect the *pair* (vault key state, issued session).  Vault._lock
@@ -144,7 +155,37 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Invalid request size") from exc
         if n < 2 or n > MAX_BODY:
             raise ValueError("Request must be between 2 and 48000 bytes")
-        data = json.loads(self.rfile.read(n))
+        deadline = time.monotonic() + HTTP_BODY_READ_TIMEOUT_SECONDS
+        previous_timeout = self.connection.gettimeout()
+        remaining = n
+        chunks = []
+        try:
+            while remaining:
+                seconds_left = deadline - time.monotonic()
+                if seconds_left <= 0:
+                    raise RequestBodyDeadlineExceeded("Request body timed out")
+                self.connection.settimeout(seconds_left)
+                try:
+                    # read1 performs no more than one underlying socket read.
+                    # Buffered read(n) can internally loop over trickled bytes
+                    # and defeat an otherwise absolute deadline.
+                    chunk = self.rfile.read1(min(remaining, 8192))
+                except TimeoutError as exc:
+                    raise RequestBodyDeadlineExceeded("Request body timed out") from exc
+                if not chunk:
+                    self.close_connection = True
+                    raise ValueError("Incomplete request body")
+                chunks.append(chunk)
+                remaining -= len(chunk)
+        except RequestBodyDeadlineExceeded:
+            self.close_connection = True
+            raise
+        finally:
+            try:
+                self.connection.settimeout(previous_timeout)
+            except OSError:
+                pass
+        data = json.loads(b"".join(chunks))
         if not isinstance(data, dict):
             raise ValueError("Expected a JSON object")
         return data
@@ -178,6 +219,8 @@ class Handler(BaseHTTPRequestHandler):
                     status = {"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,
                               "endpoint_reachable": endpoint_reachable, "ready": endpoint_reachable and self.server.model_responded,
                               "model": self.server.model.url, "model_name": self.server.model.model_name, "source_count": len(sources()),
+                              "ready_scope": "observed_local_model_output_only_not_safety",
+                              "output_review_qualified": False, "clinical_qualified": False,
                               "persistence_default": False, "local_only": True}
                 self._json(status)
             elif path == "/api/sources":
@@ -283,21 +326,35 @@ class Handler(BaseHTTPRequestHandler):
                 context = data.get("context") if isinstance(data.get("context"), list) else []
                 safety = classify(msg, context)
                 citations = source_search(msg)
+                hold_reply = (CONCERN_PREFIX if safety == "concern" else "") + REVIEW_HOLD_REPLY
+                output_review = "not_applicable"
                 if safety == "immediate":
                     reply, mode = IMMEDIATE_RESPONSE, "safety"
+                elif not callable(self.server.output_reviewer):
+                    # No bundled reviewer is qualified to release untrusted
+                    # model prose. Avoid generation altogether in this mode.
+                    reply, mode = hold_reply, "review_hold"
+                    output_review = "quarantined"
                 else:
                     try:
-                        reply = self.server.model.generate(msg, data.get("style", "direct"), data.get("depth", "balanced"), context, citations)
-                        self.server.model_responded = True
-                        mode = "model"
+                        candidate, verdict = self.server.output_admission.generate_reviewed(
+                            lambda: self.server.model.generate(
+                                msg, data.get("style", "direct"), data.get("depth", "balanced"),
+                                context, citations), message=msg, context=context,
+                            input_route=safety, reviewer=self.server.output_reviewer)
+                        if verdict == "allow":
+                            reply = CONCERN_PREFIX + candidate if safety == "concern" else candidate
+                            mode, output_review = "model", "allowed"
+                            self.server.model_responded = True
+                        else:
+                            reply, mode, output_review = hold_reply, "review_hold", "quarantined"
                     except ModelError:
                         if safety != "concern":
                             self._error(503, "Local model unavailable. Configure and start KoboldCPP or llama.cpp; no cloud fallback was used.")
                             return
                         reply, mode = "I couldn't reach your local model. " + CONCERN_PREFIX.strip(), "safety"
-                    if safety == "concern" and mode == "model":
-                        reply = CONCERN_PREFIX + reply
-                if save:
+                saved = False
+                if save and mode != "review_hold":
                     with self.server.auth_lock:
                         if self.server.session != save_session:
                             self._error(403, "Vault session changed during generation; exchange not saved")
@@ -305,7 +362,10 @@ class Handler(BaseHTTPRequestHandler):
                         if not self._authorized_session():
                             return
                         self.server.vault.add("chat", {"user": msg, "assistant": reply})
-                self._json({"reply": reply, "mode": mode, "safety": safety, "citations": [{"title": c["title"], "url": c["url"]} for c in citations]})
+                        saved = True
+                self._json({"reply": reply, "mode": mode, "safety": safety,
+                            "output_review": output_review, "saved": saved,
+                            "citations": [{"title": c["title"], "url": c["url"]} for c in citations]})
             elif self.path == "/api/journal":
                 body = data.get("text")
                 mood = data.get("mood")
@@ -322,6 +382,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._error(404, "Not found")
         except ResponseDeliveryError:
             return
+        except RequestBodyDeadlineExceeded:
+            self.close_connection = True
+            try:
+                self._error(408, "Request body timed out")
+            except ResponseDeliveryError:
+                return
         except VaultError as exc:
             self._error(423, str(exc))
         except (ValueError, json.JSONDecodeError) as exc:
@@ -348,9 +414,9 @@ class Handler(BaseHTTPRequestHandler):
             self._error(423, str(exc))
 
 
-def create_server(port=8768, database=None, model_url=None, model_name=None):
+def create_server(port=8768, database=None, model_url=None, model_name=None, output_reviewer=None):
     database = database or os.environ.get("THERAPYBOT_DB", str(Path.home() / ".therapybot" / "vault.sqlite3"))
-    return AppServer(("127.0.0.1", int(port)), Vault(database), ModelClient(model_url, model_name=model_name))
+    return AppServer(("127.0.0.1", int(port)), Vault(database), ModelClient(model_url, model_name=model_name), output_reviewer)
 
 
 def main():
