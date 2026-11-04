@@ -70,6 +70,8 @@ async function runFixture(fixture,source) {
     observed=classify(reply);
   }
   return {id:fixture.id,domain:fixture.domain,expected:fixture.expected,
+    boundary:fixture.domain==='neural'?'ACTUAL_RESIDENT_NEURAL_GATE':
+      'ACTUAL_LOCAL_PRE_PROVIDER_ROUTE_WITH_STUB_DOWNSTREAM',
     observed,passes:fixture.expected===observed};
 }
 async function runAll(source) {
