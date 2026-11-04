@@ -75,6 +75,9 @@ class HttpTests(unittest.TestCase):
         self.assertEqual([], self.request("/api/search?q=CANARY", headers=valid)[1]["results"])
 
     def test_no_cloud_fallback_and_immediate_gate(self):
+        # Explicit local test reviewer exercises the missing-model path;
+        # default unqualified output review now short-circuits generation.
+        self.server.output_reviewer = lambda **kwargs: "allow"
         self.assertEqual(503, self.request("/api/chat", "POST", {"message": "Explain behavioral activation"}, self.csrf)[0])
         code, result = self.request("/api/chat", "POST", {"message": "I already swallowed forty tablets to die"}, self.csrf)
         self.assertEqual(200, code)

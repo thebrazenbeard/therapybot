@@ -1,7 +1,8 @@
-"""Model-output boundary CHARACTERIZATION, not a passed clinical safety gate.
+"""Model-output quarantine regressions; not a clinical safety qualification.
 
-These tests deliberately confirm that unsafe synthetic model canaries currently
-pass through. They must not be construed as successful output moderation.
+Earlier source characterization demonstrated synthetic unsafe canaries passing
+through unchanged. That failure is preserved in WAVE2_MODEL_OUTPUT_REVIEW.md;
+these tests now require them to remain quarantined by default.
 """
 
 import json
@@ -82,17 +83,35 @@ class ModelOutputBoundaryCharacterization(unittest.TestCase):
     def chat(self, message):
         return self.request("/api/chat", "POST", {"message": message, "save": False}, self.csrf)
 
-    def test_observes_unscreened_concern_reply(self):
+    def test_no_qualified_reviewer_does_not_spend_model_compute(self):
+        self.model.reply = 'SYNTHETIC_NEVER_REQUESTED_CANARY'
+        status, result = self.chat('How do I organize the next task?')
+        self.assertEqual(200, status)
+        self.assertEqual('review_hold', result['mode'])
+        self.assertEqual(0, self.model.calls)
+        self.assertNotIn('SYNTHETIC_NEVER_REQUESTED_CANARY', json.dumps(result))
+        self.assertNotIn('generated a draft', result['reply'].lower())
+
+    def test_unreviewed_neural_candidate_is_quarantined_by_default(self):
+        self.model.reply = 'SYNTHETIC_UNREVIEWED_NEURAL_CANARY'
+        status, result = self.chat('How do people build better habits?')
+        self.assertEqual(200, status)
+        self.assertEqual('review_hold', result['mode'])
+        self.assertNotIn('SYNTHETIC_UNREVIEWED_NEURAL_CANARY', result['reply'])
+        self.assertIn('cannot independently review', result['reply'].lower())
+        self.assertEqual(0, self.server.vault.db.execute('SELECT COUNT(*) FROM records').fetchone()[0])
+
+    def test_quarantines_unreviewed_concern_reply(self):
         self.model.reply = "SYNTHETIC_FALSE_REASSURANCE_CANARY"
         status, result = self.chat("I sometimes wish I would never wake up.")
         self.assertEqual(200, status)
         self.assertEqual("concern", result["safety"])
-        self.assertEqual("model", result["mode"])
-        # Known defect: a warning prefix does not inspect the model completion.
-        self.assertIn("SYNTHETIC_FALSE_REASSURANCE_CANARY", result["reply"])
-        self.assertGreater(self.model.calls, 0)
+        self.assertEqual("review_hold", result["mode"])
+        self.assertIn("I want to take that seriously", result["reply"])
+        self.assertNotIn("SYNTHETIC_FALSE_REASSURANCE_CANARY", result["reply"])
+        self.assertEqual(0, self.model.calls)
 
-    def test_observes_unscreened_diagnosis_and_spiritual_causality(self):
+    def test_quarantines_unreviewed_diagnosis_and_spiritual_causality(self):
         for canary, prompt in (
             ("SYNTHETIC_DIAGNOSTIC_CERTAINTY_CANARY", "What are some possible causes of low motivation?"),
             ("SYNTHETIC_UNVERIFIED_SUPERNATURAL_CAUSE_CANARY", "Could a strange experience have a spiritual interpretation?"),
@@ -101,14 +120,14 @@ class ModelOutputBoundaryCharacterization(unittest.TestCase):
                 self.model.reply = canary
                 status, result = self.chat(prompt)
                 self.assertEqual(200, status)
-                self.assertEqual("model", result["mode"])
-                self.assertEqual(canary, result["reply"])
+                self.assertEqual("review_hold", result["mode"])
+                self.assertNotIn(canary, result["reply"])
 
-    def test_observes_unscreened_unsupported_reference(self):
+    def test_quarantines_unreviewed_unsupported_reference(self):
         self.model.reply = "SYNTHETIC_FAKE_CITATION https://example.invalid/no-source"
         status, result = self.chat("Explain behavior and interpersonal patterns")
         self.assertEqual(200, status)
-        self.assertIn("https://example.invalid/no-source", result["reply"])
+        self.assertNotIn("https://example.invalid/no-source", result["reply"])
         # The separately retrieved source list is not a verifier of model prose.
         self.assertNotIn("https://example.invalid/no-source", [s["url"] for s in result["citations"]])
 
@@ -121,19 +140,120 @@ class ModelOutputBoundaryCharacterization(unittest.TestCase):
         self.assertNotIn("SHOULD_NOT_BE_RETURNED_CANARY", result["reply"])
         self.assertEqual(0, self.model.calls)
 
-    def test_opt_in_storage_remains_off_but_model_status_updates(self):
+    def test_opt_in_storage_remains_off_and_quarantine_is_not_ready(self):
         status, result = self.chat("What is behavioral activation?")
         self.assertEqual(200, status)
-        self.assertEqual("model", result["mode"])
+        self.assertEqual("review_hold", result["mode"])
         self.assertFalse(self.server.vault.initialized)
         count = self.server.vault.db.execute("SELECT COUNT(*) FROM records").fetchone()[0]
         self.assertEqual(0, count)
         code, system_status = self.request("/api/status")
         self.assertEqual(200, code)
         self.assertTrue(system_status["endpoint_reachable"])
+        self.assertFalse(system_status["ready"])
+        self.assertFalse(system_status["output_review_qualified"])
+        self.assertFalse(system_status["clinical_qualified"])
+        self.assertEqual("observed_local_model_output_only_not_safety", system_status["ready_scope"])
+
+    def test_oversize_candidate_quarantined_even_if_reviewer_would_allow(self):
+        self.model.reply = 'SYNTHETIC_LONG_CANARY' + 'x' * 15_000
+        self.server.output_reviewer = lambda **kwargs: 'allow'
+        status, result = self.chat('What would help with organizing tasks?')
+        self.assertEqual(200, status)
+        self.assertEqual('review_hold', result['mode'])
+        self.assertNotIn('SYNTHETIC_LONG_CANARY', json.dumps(result))
+        self.assertFalse(result['saved'])
+
+    def test_explicit_server_reviewer_can_allow_benign_development_reply(self):
+        self.model.reply = "A bounded experiment can start with one concrete question."
+        seen = []
+        def reviewer(**kwargs):
+            seen.append(kwargs)
+            return "allow"
+        self.server.output_reviewer = reviewer
+        status, result = self.chat("How can I clarify this task?")
+        self.assertEqual(200, status)
+        self.assertEqual("model", result["mode"])
+        self.assertEqual(self.model.reply, result["reply"])
+        self.assertEqual("explicit_allow_unqualified", result["output_review"])
+        self.assertFalse(result["saved"])
+        self.assertEqual(1, len(seen))
+        self.assertEqual("normal", seen[0]["input_route"])
+        self.assertEqual(self.model.reply, seen[0]["candidate"])
+        code, system_status = self.request("/api/status")
+        self.assertEqual(200, code)
         self.assertTrue(system_status["ready"])
+        self.assertFalse(system_status["output_review_qualified"])
+        self.assertFalse(system_status["clinical_qualified"])
+        self.assertEqual("observed_local_model_output_only_not_safety", system_status["ready_scope"])
+
+    def test_explicit_reviewer_block_and_unknown_never_leak(self):
+        for verdict in ("block", "unknown", True, None, {"route": "allow"}):
+            with self.subTest(verdict=verdict):
+                self.server.output_reviewer = lambda **kwargs: verdict
+                self.model.reply = "SYNTHETIC_BLOCKED_COMPLETION_CANARY"
+                status, result = self.chat("Can you help me reflect?")
+                self.assertEqual(200, status)
+                self.assertEqual("review_hold", result["mode"])
+                self.assertEqual("quarantined", result["output_review"])
+                self.assertNotIn(self.model.reply, json.dumps(result))
+                self.assertFalse(result["saved"])
+
+    def test_reviewer_exception_quarantines_without_error_or_candidate_leak(self):
+        def reviewer(**kwargs):
+            raise RuntimeError("SYNTHETIC_REVIEWER_EXCEPTION_CANARY")
+        self.server.output_reviewer = reviewer
+        self.model.reply = "SYNTHETIC_UNSAFE_MODEL_CANARY"
+        status, result = self.chat("How can I plan tomorrow?")
+        self.assertEqual(200, status)
+        self.assertEqual("review_hold", result["mode"])
+        self.assertNotIn("SYNTHETIC_UNSAFE_MODEL_CANARY", json.dumps(result))
+        self.assertNotIn("SYNTHETIC_REVIEWER_EXCEPTION_CANARY", json.dumps(result))
+
+    def test_urgent_input_skips_model_and_optional_reviewer(self):
+        def forbidden_reviewer(**kwargs):
+            self.fail("Reviewer should not see immediate input")
+        self.server.output_reviewer = forbidden_reviewer
+        status, result = self.chat("I already swallowed forty tablets to die")
+        self.assertEqual(200, status)
+        self.assertEqual("safety", result["mode"])
+        self.assertEqual("not_applicable", result["output_review"])
+        self.assertEqual(0, self.model.calls)
+
+    def test_opt_in_save_never_persists_quarantined_completion(self):
+        status, unlocked = self.request(
+            "/api/unlock", "POST", {"passphrase": "a-synthetic-very-long-passphrase"}, self.csrf)
+        self.assertEqual(200, status)
+        headers = {**self.csrf, "X-TherapyBot-Session": unlocked["session"]}
+        self.model.reply = "SYNTHETIC_NOT_PERSISTED_CANARY"
+        status, result = self.request("/api/chat", "POST",
+            {"message": "Tell me about task focus", "save": True}, headers)
+        self.assertEqual(200, status)
+        self.assertEqual("review_hold", result["mode"])
+        self.assertFalse(result["saved"])
+        self.assertNotIn("SYNTHETIC_NOT_PERSISTED_CANARY", json.dumps(result))
+        self.assertEqual([], self.server.vault.list("chat"))
+        self.assertEqual(0, self.server.vault.db.execute(
+            "SELECT COUNT(*) FROM records").fetchone()[0])
+
+    def test_reviewed_block_with_opt_in_save_never_persists_candidate(self):
+        status, unlocked = self.request(
+            "/api/unlock", "POST", {"passphrase": "another-synthetic-long-passphrase"}, self.csrf)
+        self.assertEqual(200, status)
+        headers = {**self.csrf, "X-TherapyBot-Session": unlocked["session"]}
+        self.server.output_reviewer = lambda **kwargs: "block"
+        self.model.reply = "SYNTHETIC_GENERATED_BLOCKED_CANARY"
+        status, result = self.request("/api/chat", "POST",
+            {"message": "What is behavior change?", "save": True}, headers)
+        self.assertEqual(200, status)
+        self.assertGreater(self.model.calls, 0)
+        self.assertEqual("review_hold", result["mode"])
+        self.assertFalse(result["saved"])
+        self.assertNotIn(self.model.reply, json.dumps(result))
+        self.assertEqual([], self.server.vault.list("chat"))
 
     def test_model_failure_returns_local_503_without_cloud_fallback(self):
+        self.server.output_reviewer = lambda **kwargs: 'allow'
         self.model.fail = True
         status, result = self.chat("Explain behavioral activation")
         self.assertEqual(503, status)

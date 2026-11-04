@@ -12,6 +12,7 @@ from pathlib import Path
 from . import __version__
 from .knowledge import search as source_search, sources
 from .model import ModelClient, ModelError
+from .output_review import REVIEW_HOLD_REPLY, review_candidate
 from .safety import CONCERN_PREFIX, IMMEDIATE_RESPONSE, classify
 from .storage import Vault, VaultError
 
@@ -42,11 +43,14 @@ class AppServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, vault, model):
+    def __init__(self, address, vault, model, output_reviewer=None):
         if address[0] != "127.0.0.1":
             raise ValueError("TherapyBot only binds to 127.0.0.1")
         self.vault = vault
         self.model = model
+        # Only trusted server-side code may supply a reviewer. No qualified
+        # generated-output reviewer is bundled; absent means quarantine.
+        self.output_reviewer = output_reviewer
         self.csrf = secrets.token_urlsafe(32)
         self.session = None  # Issued only after a correct vault passphrase.
         self.model_responded = False  # Only true after this process observed a reply.
@@ -149,6 +153,8 @@ class Handler(BaseHTTPRequestHandler):
                 endpoint_reachable = self._model_ready()
                 self._json({"version": __version__, "storage": "unlocked" if self.server.vault.unlocked else "locked", "initialized": self.server.vault.initialized,
                             "endpoint_reachable": endpoint_reachable, "ready": endpoint_reachable and self.server.model_responded,
+                            "ready_scope": "observed_local_model_output_only_not_safety",
+                            "output_review_qualified": False, "clinical_qualified": False,
                             "model": self.server.model.url, "model_name": self.server.model.model_name, "source_count": len(sources()),
                             "persistence_default": False, "local_only": True})
             elif path == "/api/sources":
@@ -212,23 +218,46 @@ class Handler(BaseHTTPRequestHandler):
                 context = data.get("context") if isinstance(data.get("context"), list) else []
                 safety = classify(msg, context)
                 citations = source_search(msg)
+                output_review = "not_applicable"
                 if safety == "immediate":
                     reply, mode = IMMEDIATE_RESPONSE, "safety"
+                elif not callable(self.server.output_reviewer):
+                    # An absent reviewer is a known configuration failure: do
+                    # not burn CPU/GPU to generate text we must always hide.
+                    reply, mode = REVIEW_HOLD_REPLY, "review_hold"
+                    output_review = "quarantined"
+                    if safety == "concern":
+                        reply = CONCERN_PREFIX + reply
                 else:
                     try:
-                        reply = self.server.model.generate(msg, data.get("style", "direct"), data.get("depth", "balanced"), context, citations)
-                        self.server.model_responded = True
-                        mode = "model"
+                        candidate = self.server.model.generate(msg, data.get("style", "direct"), data.get("depth", "balanced"), context, citations)
+                        verdict = review_candidate(
+                            message=msg, candidate=candidate, context=context,
+                            input_route=safety, reviewer=self.server.output_reviewer)
+                        if verdict == "allow":
+                            reply, mode = candidate, "model"
+                            self.server.model_responded = True
+                            output_review = "explicit_allow_unqualified"
+                        else:
+                            # No built-in qualified output reviewer exists. Even a
+                            # concern prefix cannot make arbitrary model prose safe.
+                            reply, mode = REVIEW_HOLD_REPLY, "review_hold"
+                            output_review = "quarantined"
                     except ModelError:
                         if safety != "concern":
                             self._error(503, "Local model unavailable. Configure and start KoboldCPP or llama.cpp; no cloud fallback was used.")
                             return
                         reply, mode = "I couldn't reach your local model. " + CONCERN_PREFIX.strip(), "safety"
-                    if safety == "concern" and mode == "model":
+                    if safety == "concern" and mode in ("model", "review_hold"):
                         reply = CONCERN_PREFIX + reply
-                if save:
+                # Do not persist a generated candidate, or misleading stand-in,
+                # when its separate output review did not authorize display.
+                saved = bool(save and mode != "review_hold")
+                if saved:
                     self.server.vault.add("chat", {"user": msg, "assistant": reply})
-                self._json({"reply": reply, "mode": mode, "safety": safety, "citations": [{"title": c["title"], "url": c["url"]} for c in citations]})
+                self._json({"reply": reply, "mode": mode, "safety": safety,
+                            "output_review": output_review, "saved": saved,
+                            "citations": [{"title": c["title"], "url": c["url"]} for c in citations]})
             elif self.path == "/api/journal":
                 if not self._authorized_session():
                     return
@@ -264,9 +293,10 @@ class Handler(BaseHTTPRequestHandler):
             self._error(423, str(exc))
 
 
-def create_server(port=8768, database=None, model_url=None, model_name=None):
+def create_server(port=8768, database=None, model_url=None, model_name=None, output_reviewer=None):
     database = database or os.environ.get("THERAPYBOT_DB", str(Path.home() / ".therapybot" / "vault.sqlite3"))
-    return AppServer(("127.0.0.1", int(port)), Vault(database), ModelClient(model_url, model_name=model_name))
+    return AppServer(("127.0.0.1", int(port)), Vault(database),
+                     ModelClient(model_url, model_name=model_name), output_reviewer)
 
 
 def main():
