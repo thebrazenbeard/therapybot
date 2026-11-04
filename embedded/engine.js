@@ -160,24 +160,32 @@
         !/\b(?:overdose|too many|handful|whole bottle|to die|more than prescribed|faint)\b/.test(clause);
       const acuteIngestion = /\b(?:i|we)\s+(?:(?:just|already)\s+)?(?:took|swallowed|ingested|ate)\b.{0,100}\b(?:overdose|too many|handful|bottle|entire bottle|every pill|poison|bleach|pills|tablets)\b/.test(clause) &&
         /\b(?:entire|whole|every|too many|overdose|handful|to die|poison|bleach)\b/.test(clause);
+      const quantifiedMedication = /\b(?:i|we)\s+(?:(?:just|already|recently)\s+)?(?:took|swallowed|ingested|ate)\s+(?:\d{2,}|dozens? of)\s+(?:\w+\s+){0,2}(?:painkillers?|pills?|tablets?|capsules?|medications?|pain ?medications?)\b/.test(clause) &&
+        /\b(?:just|now|today|tonight|recently|already|this morning|this evening)\b/.test(clause);
       const acuteOverdose = /\b(?:i|we)\s+(?:just|already|recently)?\s*overdosed\b/.test(clause);
       const acuteBleeding = /\b(?:bleeding (?:badly|heavily|profusely)|blood (?:is )?(?:pouring|gushing)|can't stop bleeding|cannot stop bleeding)\b/.test(clause) &&
         /\b(?:now|right now|just|already|my|me|i|child|son|daughter|partner|friend|blood)\b/.test(clause);
       const acuteBreathing = /\b(?:cannot|can't|not)\s+(?:breathe|breathing)\b/.test(clause);
       const acuteInjury = /\b(?:i (?:have )?(?:already|just)\s+)?(?:slashed|cut|stabbed)\s+my\s+(?:wrist|wrists)\b.{0,100}\b(?:bleeding|blood|won't stop|cannot stop)\b/.test(clause);
+      const weaponAtSelf = /\b(?:i (?:have|am holding)|there is)\b.{0,55}\b(?:loaded\s+)?(?:gun|firearm|pistol)\b.{0,55}\b(?:pointed|aimed|against|at)\b.{0,20}\b(?:my|me)\b/.test(clause) ||
+        /\b(?:gun|firearm|pistol)\b.{0,50}\b(?:pointed|aimed|against)\s+(?:at\s+)?my\s+(?:head|chest|temple)\b/.test(clause);
+      const imminentJump = /\b(?:i\s+(?:have\s+)?(?:decided|plan|intend|want)|i'm\s+(?:going|about)|i\s+am\s+(?:going|about))\b.{0,30}\b(?:jump|throw myself)\s+(?:off|from)\s+(?:a|the|this)?\s*(?:bridge|roof|building|cliff)\b/.test(clause);
+      const frighteningHarmVoice = /\b(?:voice|part of me|voices)\b.{0,95}\b(?:wants?|tells?|urges?|commands?|ordering|giving me commands?)\b.{0,55}\b(?:hurt|kill|shoot|stab)\b/.test(clause);
       const thirdPersonImminent = /\b(?:about to|going to|plans? to|intend(?:s)? to|will)\s+(?:kill|hurt|shoot|stab)\s+(?:herself|himself|themself|themselves|me|us)\b/.test(clause) ||
         /\b(?:my partner|my spouse|my husband|my wife|my ex|he|she|they)\b.{0,65}\b(?:threatened|plans?|going)\b.{0,45}\b(?:kill|shoot|stab)\s+(?:me|us)\b.{0,30}\b(?:tonight|today|now|soon|right now)\b/.test(clause);
       const explicitCurrentIntent = /\b(?:going to|about to|plan to|intend to|i will)\s+(?:kill myself|end my life|hurt myself|kill someone|hurt someone|cut my wrists?|slash my wrists?)\b/.test(clause) ||
         /\b(?:i\s+(?:will|am going to|plan to|intend to)|i'm going to)\s+(?:kill|hurt|shoot|stab)\s+(?:my\s+)?(?:neighbor|brother|sister|parent|mother|father|wife|husband|partner|friend|child|son|daughter|coworker|boss|someone|anyone|him|her|them)\b/.test(clause);
       const spanishCurrentIntent = /\b(?:voy a quitarme la vida|me voy a suicidar|voy a matarme)\b/.test(clause) &&
         /\b(?:esta noche|ahora|hoy|ya|pronto)\b/.test(clause);
-      const immediate = (acuteIngestion && !routineMedication) || acuteOverdose || acuteBleeding || acuteBreathing || acuteInjury ||
+      const immediate = (acuteIngestion && !routineMedication) || (quantifiedMedication && !routineMedication) ||
+        acuteOverdose || acuteBleeding || acuteBreathing || acuteInjury || weaponAtSelf || imminentJump ||
         thirdPersonImminent || spanishCurrentIntent || (explicitCurrentIntent && !negatedIntent);
       // A fictional frame describes source context; it must not automatically
       // mask a subsequent direct disclosure. Ambiguous same-clause fiction is
       // clarified rather than treated as established live intent.
       if (immediate && (!fictional || /\b(?:in real life|actually i|but now|right now i)\b/.test(clause))) return 'urgent_review';
       if (immediate && fictional) concern = true;
+      if (!fictional && frighteningHarmVoice) concern = true;
       if (!fictional && !negatedIntent && !negatedConcern && /\b(?:suicidal|suicide|self harm|self-harm|wish i were dead|want to die|hurt myself|hurt someone|kill myself)\b/.test(clause)) {
         concern = true;
       }
@@ -188,8 +196,9 @@
   function partnerViolence(message) {
     const text = clean(message, 8000);
     const direct = /\b(?:my (?:partner|husband|wife|boyfriend|girlfriend|spouse|ex))\b.{0,80}\b(?:hit|punched|assaulted|struck|choked|strangled|slapped|kicked|pushed|threatened|attacked)\s+(?:me|my)\b/.test(text);
+    const confinement = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:locked me in|locks me in|keeps me locked|trapped me|traps me|won't let me leave|will not let me leave|prevents me leaving)\b/.test(text);
     const fear = /\b(?:afraid|scared|terrified|unsafe|fear|can't go home|cannot go home|don't feel safe|do not feel safe)\b/.test(text);
-    return direct && fear;
+    return (direct || confinement) && fear;
   }
 
   function matchedTopic(text) {
@@ -266,8 +275,11 @@
     const current = matchedTopic(message);
     const prior = previousTopic(history);
     const anaphora = /\b(?:that|this|it|they|them|again|same thing)\b/i.test(message) && words(message).length <= 18;
-    const topic = current || (anaphora ? prior : null);
-    const followup = Boolean(!current && prior && anaphora);
+    const directFollowup = /^(?:what (?:would|should|can) (?:you|i) (?:suggest|recommend|do)|how (?:should|can|do) i (?:respond|proceed|handle|approach)|what are my options|what next)\b/i.test(message) && words(message).length <= 16;
+    const corrective = /\b(?:not what i meant|you misunderstood|that's wrong|that is wrong|not talking about that)\b/i.test(message);
+    const followup = Boolean(!current && prior && !corrective && (anaphora || directFollowup));
+    const topic = current || (followup ? prior : null);
+    const intent = detectIntent(message);
     const state = { topic: topic ? topic.key : null, followup };
     const safety = { route, coverage: 'unvalidated' };
     let reply;
@@ -277,7 +289,7 @@
       reply = URGENT;
       uncertainty = 'A lexical cue triggered this unvalidated caution; it cannot establish urgency or intent.';
     } else if (interpersonalViolence) {
-      reply = 'Being hit or threatened by a partner and feeling afraid is a safety concern, not simply a disagreement with two equally valid sides. I will not assume confronting them or leaving is straightforward. If there is immediate danger, local emergency services may help. Would you like to consider what could make the next few hours safer, or describe what happened without advice?';
+      reply = 'Being hurt, threatened, or confined by a partner while feeling afraid is a safety concern, not simply a disagreement with two equally valid sides. I will not assume confronting them or leaving is straightforward. If there is immediate danger, local emergency services may help. Would you like to consider what could make the next few hours safer, or describe what happened without advice?';
       uncertainty = 'This is a literal-text safety cue, not an assessment of the situation or a determination of available options.';
     } else if (route === 'concern') {
       reply = CONCERN;
@@ -288,11 +300,13 @@
     } else if (/^(?:hi|hello|hey|good morning|good evening)[.!?\s]*$/i.test(message)) {
       reply = 'Hello. What would you like to talk about?';
       uncertainty = 'Greeting only; no topic interpreted.';
+    } else if (intent === 'listen') {
+      reply = LISTEN + '\n\nWhat would you like me to hear first?';
+      uncertainty = 'The request to listen was explicit; no details beyond the supplied message were inferred.';
     } else if (!topic) {
       reply = UNKNOWN;
       uncertainty = 'No supported topic matched confidently. I chose clarification instead of guessing.';
     } else {
-      const intent = detectIntent(message);
       const sameTopicCount = history.reduce(function (n, item) {
         return n + (item && item.role === 'user' && matchedTopic(item.content)?.key === topic.key ? 1 : 0);
       }, 0);

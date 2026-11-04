@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="style.css">
   <script defer src="catalog.js"></script>
   <script defer src="engine.js"></script>
+  <script defer src="council.js"></script>
   <script defer src="ui.js"></script>
 </head>
 <body>
@@ -37,6 +38,7 @@
             <li>Structured topic and context matching</li>
             <li>Source-linked reflection prompts</li>
             <li>In-memory conversational context</li>
+            <li>An optional, user-defined Inner Council</li>
           </ul>
           <p class="small-note">This is a constrained semantic engine, not a trained language model, and its reasoning is not clinically validated.</p>
         </div>
@@ -69,8 +71,45 @@
         <section class="chat-card" aria-labelledby="conversation-title">
           <div class="chat-header">
             <div><span class="eyebrow">CONVERSATION</span><h2 id="conversation-title">A place to examine a thought.</h2></div>
-            <div class="chat-header-actions"><span class="status-chip"><span class="chip-dot" aria-hidden="true"></span> Unsaved · tab memory only</span><button id="clear-chat" type="button" class="text-button">Clear chat</button></div>
+            <div class="chat-header-actions"><span class="status-chip"><span class="chip-dot" aria-hidden="true"></span> Unsaved · tab memory only</span><button id="clear-chat" type="button" class="text-button">Clear chat</button><button id="clear-all" type="button" class="text-button">Forget all</button></div>
           </div>
+
+          <div class="council-toolbar" aria-label="Inner Council controls">
+            <div class="council-toolbar-copy">
+              <strong>My Inner Council</strong>
+              <span id="council-count">No members defined</span>
+            </div>
+            <div class="council-actions">
+              <button id="convene-council" type="button" class="council-primary" aria-pressed="false">Convene</button>
+              <button id="manage-council" type="button" class="council-secondary" aria-expanded="false" aria-controls="council-setup">Manage members</button>
+            </div>
+          </div>
+
+          <section id="council-setup" class="council-setup" aria-label="Define my Inner Council" hidden>
+            <div class="council-setup-heading">
+              <h3>Give your perspectives a voice.</h3>
+              <p>Choose the names and roles yourself. These are optional reflection perspectives, not diagnoses or independent clinical authorities. No profiles leave this tab or persist after refresh.</p>
+            </div>
+            <form id="member-form" autocomplete="off">
+              <div class="member-fields">
+                <label>Member name
+                  <input id="member-name" name="member-name" type="text" maxlength="48" placeholder="Example: The Skeptic" required>
+                </label>
+                <label>Role or perspective
+                  <input id="member-role" name="member-role" type="text" maxlength="100" placeholder="What does this perspective notice?" required>
+                </label>
+              </div>
+              <label class="member-notes-label">Optional speaking notes
+                <textarea id="member-notes" name="member-notes" rows="2" maxlength="200" placeholder="Values, boundaries, or how this perspective tends to speak"></textarea>
+              </label>
+              <div class="member-form-actions">
+                <button id="save-member" class="council-primary" type="submit">Add member</button>
+                <button id="cancel-member-edit" class="council-secondary" type="button" hidden>Cancel edit</button>
+              </div>
+              <div id="member-feedback" class="form-feedback" role="status" aria-live="polite"></div>
+            </form>
+            <ul id="member-list" class="member-list" aria-label="Members of my Inner Council"></ul>
+          </section>
 
           <div id="conversation-log" class="conversation-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation in this tab">
             <div id="welcome" class="welcome-panel">
@@ -96,7 +135,7 @@
                 </div>
                 <button id="send-message" type="button" class="send-button">Send <span aria-hidden="true">↗</span></button>
               </div>
-              <p class="message-hint" id="message-hint">Enter sends only when you click Send or press Ctrl/⌘ + Enter. Nothing is saved.</p>
+              <p class="message-hint" id="message-hint">Send or press Ctrl/⌘ + Enter. Try <code>Council:</code>, <code>Solo &lt;name&gt;:</code>, <code>Integrate:</code>, or <code>Containment:</code>. All modes are experimental; nothing is saved.</p>
               <div id="form-feedback" class="form-feedback" role="status" aria-live="polite"></div>
             </form>
           </div>

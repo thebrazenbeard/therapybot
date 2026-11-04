@@ -8,14 +8,30 @@
   const log = byId('conversation-log');
   const sendButton = byId('send-message');
   const clearButton = byId('clear-chat');
+  const forgetAllButton = byId('clear-all');
   const status = byId('engine-status');
   const feedback = byId('form-feedback');
+  const conveneButton = byId('convene-council');
+  const manageButton = byId('manage-council');
+  const memberSetup = byId('council-setup');
+  const memberForm = byId('member-form');
+  const memberList = byId('member-list');
+  const memberName = byId('member-name');
+  const memberRole = byId('member-role');
+  const memberNotes = byId('member-notes');
+  const saveMemberButton = byId('save-member');
+  const cancelEditButton = byId('cancel-member-edit');
+  const memberFeedback = byId('member-feedback');
 
   // Conversation context is intentionally a volatile JavaScript array.
   // No localStorage, sessionStorage, IndexedDB, cookies or API requests.
   let history = [];
   let generation = 0;
   let sending = false;
+  let members = [];
+  let nextMemberId = 1;
+  let editingMemberId = null;
+  let councilSelected = false;
 
   const make = (tag, className, content) => {
     const el = document.createElement(tag);
@@ -26,6 +42,10 @@
 
   function engineAvailable() {
     return Boolean(window.TherapyBotEmbedded && typeof window.TherapyBotEmbedded.respond === 'function');
+  }
+
+  function councilAvailable() {
+    return Boolean(window.TherapyBotCouncil && typeof window.TherapyBotCouncil.respond === 'function');
   }
 
   function updateAvailability() {
@@ -40,6 +60,122 @@
     feedback.textContent = text;
     feedback.classList.toggle('error', error);
   }
+
+  function setMemberFeedback(text, error = false) {
+    memberFeedback.textContent = text;
+    memberFeedback.classList.toggle('error', error);
+  }
+
+  function updateCouncilControls() {
+    byId('council-count').textContent = members.length
+      ? members.length + (members.length === 1 ? ' member' : ' members') + ' · unsaved'
+      : 'No members defined';
+    conveneButton.textContent = councilSelected ? 'Return to direct chat' : 'Convene';
+    conveneButton.setAttribute('aria-pressed', councilSelected ? 'true' : 'false');
+    messageField.placeholder = councilSelected
+      ? 'What would you like your Council to consider?'
+      : 'What would you like to untangle?';
+  }
+
+  function openCouncilSetup(open) {
+    memberSetup.hidden = !open;
+    manageButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) memberName.focus();
+  }
+
+  function resetMemberEditor() {
+    editingMemberId = null;
+    memberForm.reset();
+    saveMemberButton.textContent = 'Add member';
+    cancelEditButton.hidden = true;
+  }
+
+  function renderMembers() {
+    memberList.replaceChildren();
+    for (const member of members) {
+      const item = make('li', 'member-card');
+      const copy = make('div', 'member-copy');
+      copy.append(make('strong', '', member.name), make('span', '', member.role));
+      if (member.notes) copy.append(make('p', '', member.notes));
+      const actions = make('div', 'member-card-actions');
+      const edit = make('button', '', 'Edit');
+      edit.type = 'button';
+      edit.setAttribute('aria-label', 'Edit ' + member.name);
+      edit.addEventListener('click', () => {
+        editingMemberId = member.id;
+        memberName.value = member.name;
+        memberRole.value = member.role;
+        memberNotes.value = member.notes || '';
+        saveMemberButton.textContent = 'Save changes';
+        cancelEditButton.hidden = false;
+        openCouncilSetup(true);
+        setMemberFeedback('Editing ' + member.name + '.');
+      });
+      const remove = make('button', '', 'Remove');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', 'Remove ' + member.name);
+      remove.addEventListener('click', () => {
+        members = members.filter((candidate) => candidate.id !== member.id);
+        if (editingMemberId === member.id) resetMemberEditor();
+        if (!members.length) councilSelected = false;
+        renderMembers();
+        updateCouncilControls();
+        setMemberFeedback(member.name + ' removed from this tab. This does not erase conversation messages.');
+      });
+      actions.append(edit, remove);
+      item.append(copy, actions);
+      memberList.append(item);
+    }
+  }
+
+  memberForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const name = memberName.value.trim();
+    const role = memberRole.value.trim();
+    const notes = memberNotes.value.trim();
+    if (!name || !role) return setMemberFeedback('Choose both a member name and a role.', true);
+    if (!/^[\p{L}\p{N}][\p{L}\p{N} .,'’_-]*$/u.test(name)) {
+      return setMemberFeedback('Member names can contain letters, numbers, spaces, hyphens, underscores and simple punctuation.', true);
+    }
+    if (members.some((member) => member.name.toLocaleLowerCase() === name.toLocaleLowerCase() && member.id !== editingMemberId)) {
+      return setMemberFeedback('That name is already in your Council. Choose a distinct name.', true);
+    }
+    if (editingMemberId) {
+      members = members.map((member) => member.id === editingMemberId ? { id: member.id, name, role, notes } : member);
+      setMemberFeedback(name + ' updated for this tab.');
+    } else {
+      if (members.length >= 32) return setMemberFeedback('This experiment supports at most 32 members in one tab.', true);
+      members.push({ id: 'member-' + nextMemberId++, name, role, notes });
+      setMemberFeedback(name + ' added to your Council in this tab.');
+    }
+    resetMemberEditor();
+    renderMembers();
+    updateCouncilControls();
+    memberName.focus();
+  });
+  cancelEditButton.addEventListener('click', () => {
+    resetMemberEditor();
+    setMemberFeedback('Edit cancelled.');
+    memberName.focus();
+  });
+  manageButton.addEventListener('click', () => openCouncilSetup(memberSetup.hidden));
+  conveneButton.addEventListener('click', () => {
+    if (!councilAvailable()) {
+      setFeedback('The bundled Council module did not load. Keep the complete embedded/ folder together.', true);
+      return;
+    }
+    if (!members.length && !councilSelected) {
+      openCouncilSetup(true);
+      setMemberFeedback('Add at least one perspective before convening your Council.');
+      return;
+    }
+    councilSelected = !councilSelected;
+    updateCouncilControls();
+    setFeedback(councilSelected
+      ? 'Council selected. Your next message will invite your user-defined perspectives; this is not clinical assessment.'
+      : 'Direct conversation selected.');
+    messageField.focus();
+  });
 
   function sourceAnchor(source) {
     if (!source || typeof source !== 'object') return null;
@@ -58,9 +194,31 @@
     if (welcome) welcome.remove();
     const isUser = role === 'user';
     const article = make('article', 'message ' + (isUser ? 'message--user' : 'message--assistant'));
-    const label = make('span', 'message-label', isUser ? 'You' : 'TherapyBot · embedded');
-    const text = make('div', 'message-content', content);
-    article.append(label, text);
+    const speakers = !isUser && Array.isArray(result?.speakers) ? result.speakers : [];
+    const label = make('span', 'message-label', isUser ? 'You' : speakers.length ? 'Inner Council · experimental' : 'TherapyBot · embedded');
+    article.append(label);
+    if (speakers.length) {
+      if (typeof result?.introduction === 'string' && result.introduction.trim()) {
+        article.append(make('div', 'message-content', result.introduction));
+      }
+      const group = make('div', 'council-speakers');
+      for (const speaker of speakers.slice(0, 40)) {
+        if (!speaker || typeof speaker !== 'object') continue;
+        const card = make('div', 'council-speaker');
+        card.append(make('strong', 'council-speaker-name', speaker.name || 'Unnamed perspective'));
+        if (speaker.role) card.append(make('span', 'council-speaker-role', speaker.role));
+        card.append(make('div', 'council-speaker-text', speaker.text || speaker.content || ''));
+        group.append(card);
+      }
+      if (group.childElementCount) article.append(group);
+      if (typeof result?.facilitator === 'string' && result.facilitator.trim()) {
+        const summary = make('div', 'council-facilitator');
+        summary.append(make('strong', '', 'Facilitator · experimental'), make('p', '', result.facilitator));
+        article.append(summary);
+      }
+    } else {
+      article.append(make('div', 'message-content', content));
+    }
 
     if (result && !isUser) {
       const topic = typeof result.state?.topic === 'string' ? result.state.topic : null;
@@ -102,8 +260,22 @@
     log.replaceChildren();
     welcomeBack();
     messageField.value = '';
-    setFeedback('Conversation cleared from this tab. Nothing was saved.');
+    setFeedback('Conversation cleared. Your unsaved Council member definitions remain in this tab until refresh.');
     messageField.focus();
+  }
+
+  function forgetAll() {
+    if (!window.confirm('Forget this conversation and all Inner Council members in this tab?')) return;
+    clearChat();
+    members = [];
+    nextMemberId = 1;
+    councilSelected = false;
+    resetMemberEditor();
+    renderMembers();
+    updateCouncilControls();
+    openCouncilSetup(false);
+    setMemberFeedback('Council roster forgotten.');
+    setFeedback('Conversation and Council members forgotten from this tab.');
   }
 
   async function sendMessage(event) {
@@ -131,10 +303,35 @@
       if (!result || typeof result.reply !== 'string' || result.engine !== 'embedded-semantic') {
         throw new Error('Unexpected embedded-engine response format.');
       }
-      appendMessage('assistant', result.reply, result);
-      history.push({ role: 'user', content: message }, { role: 'assistant', content: result.reply });
+      // The base engine always executes first. High-risk routing cannot be
+      // downgraded by an experimental role-play / Council layer.
+      const councilResult = councilAvailable() && result.safety?.route === 'normal'
+        ? await Promise.resolve(window.TherapyBotCouncil.respond({
+          message,
+          members: members.map((member) => ({ ...member })),
+          history: history.slice(-10),
+          baseResult: result,
+          mode: councilSelected ? 'council' : undefined,
+        }))
+        : result;
+      if (epoch !== generation) return;
+      if (!councilResult || typeof councilResult.reply !== 'string') throw new Error('Unexpected Council response format.');
+      if (result.safety?.route !== 'normal' && councilResult !== result) {
+        throw new Error('The Council cannot replace a safety response.');
+      }
+      appendMessage('assistant', councilResult.reply, councilResult);
+      history.push({ role: 'user', content: message }, { role: 'assistant', content: councilResult.reply });
       if (history.length > 12) history = history.slice(-12);
-      setFeedback(result.supportedTopic ? 'Structured topic response · review the sources and limits.' : 'Limited topic coverage · do not rely on this as professional guidance.');
+      const councilMode = councilResult.state?.councilMode;
+      if (councilMode === 'containment') {
+        councilSelected = false;
+        updateCouncilControls();
+      }
+      setFeedback(councilMode
+        ? 'Experimental ' + councilMode + ' reflection · these are user-authored perspectives, not diagnoses.'
+        : councilResult.supportedTopic
+          ? 'Structured topic response · review the sources and limits.'
+          : 'Limited topic coverage · do not rely on this as professional guidance.');
     } catch (error) {
       if (epoch === generation) {
         appendMessage('assistant', 'The bundled engine could not complete that reply. No remote service was contacted.');
@@ -144,7 +341,7 @@
     } finally {
       sending = false;
       updateAvailability();
-      messageField.focus();
+      if (document.activeElement === sendButton || document.activeElement === messageField) messageField.focus();
     }
   }
 
@@ -153,6 +350,7 @@
   // fails to initialize, a browser must not put sensitive text into a file URL.
   sendButton.addEventListener('click', sendMessage);
   clearButton.addEventListener('click', clearChat);
+  forgetAllButton.addEventListener('click', forgetAll);
   messageField.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
@@ -167,4 +365,5 @@
   });
 
   updateAvailability();
+  updateCouncilControls();
 })();
