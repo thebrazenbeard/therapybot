@@ -72,14 +72,18 @@ def search_sources(query: str, limit: int = 4) -> list[dict]:
     """Deterministic lexical search of verified pointers; no external requests."""
     words = set(re.findall(r"[a-z0-9]{3,}", query.lower())) - {
         "the", "and", "that", "with", "what", "for", "from", "about", "this", "have", "when", "your", "help",
+        "you", "are", "only", "person", "need", "promise", "never", "leave", "said", "tell", "can", "does", "work",
+        "please", "would", "could", "should", "will", "was", "were", "been", "today", "tonight", "someone", "there",
     }
     if not words:
-        return SOURCES[:limit]
+        return SOURCES[:limit] if not query.strip() else []
     scores = []
     for source in SOURCES:
-        tags = source["tags"].lower()
-        corpus = (source["title"] + " " + source["summary"]).lower()
-        score = sum(3 if word in tags.split() else 1 if word in corpus else 0 for word in words)
+        tags = set(re.findall(r"[a-z0-9]{3,}", source["tags"].lower()))
+        titles = set(re.findall(r"[a-z0-9]{3,}", source["title"].lower()))
+        # Require a topical tag/title match. Generic prose matches previously
+        # surfaced unrelated crisis resources in ordinary relationship chat.
+        score = sum(3 if word in tags else 2 if word in titles else 0 for word in words)
         if score:
             scores.append((score, source))
     return [item for _, item in sorted(scores, key=lambda row: -row[0])[:limit]]

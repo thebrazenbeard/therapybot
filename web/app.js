@@ -177,6 +177,7 @@ async function unlockVault(event) {
     const response = await api("/api/vault", { method: "POST", body: { passphrase } });
     rememberToken(response.token);
     setVaultState(true);
+    refreshStatus();
     if (tabChannel) tabChannel.postMessage({ type: "vault-revoked" });
     showView("chat");
     $("chatInput").focus();

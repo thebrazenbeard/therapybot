@@ -2,6 +2,10 @@
 
 TherapyBot is a **free, local-first HTML application** for talking to your own GGUF-compatible local language-model server. It also provides a passphrase-encrypted conversation/journal vault and a small searchable index of attributed public-health references.
 
+![TherapyBot HTML interface in an isolated headless Edge test](docs/images/therapybot-html-preview.png)
+
+*Actual 1440 × 900 browser screenshot from a synthetic, local-only test. No personal records are shown.*
+
 It is **not psychotherapy, diagnosis, treatment, a clinically validated safety system, or an emergency response service**. A language model can make serious mistakes.
 
 ## Implemented in this MVP
