@@ -21,7 +21,7 @@
         'Which consequence are you trying to avoid, and what part of this decision is under your control?',
         'Would it help to separate what has been documented from what is still being assumed?'
       ],
-      sources: ['who-mental-health']
+      sources: ['who-world-mental-health-2022']
     },
     {
       key: 'boundaries',
@@ -36,7 +36,7 @@
         'What consequence would make that boundary difficult to hold?',
         'What would an enforceable boundary look like within your actual constraints?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'relationships',
@@ -51,7 +51,7 @@
         'Are you trying to understand their behavior, decide what to say, or work out your own limits?',
         'What would respectful communication look like here without requiring you to ignore your own needs?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'anger',
@@ -81,7 +81,7 @@
         'What kind of contact feels useful rather than draining?',
         'What would you want more of, without giving up the space you need?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'trauma',
@@ -96,7 +96,7 @@
         'What feels most important about this experience in your own words?',
         'What would help you keep control over how much of this you examine today?'
       ],
-      sources: ['nimh-psychotherapies', 'who-mental-health']
+      sources: ['nimh-psychotherapies', 'who-world-mental-health-2022']
     },
     {
       key: 'mood',
@@ -111,7 +111,7 @@
         'Is there an immediate pressure you want to unpack first?',
         'What would make the next part of today even slightly more manageable?'
       ],
-      sources: ['nimh-psychotherapies', 'who-mental-health']
+      sources: ['nimh-psychotherapies', 'who-world-mental-health-2022']
     },
     {
       key: 'identity',
@@ -233,11 +233,28 @@
     return score > 0 ? best : null;
   }
 
+  function isCorrection(message) {
+    return /\b(?:not what i meant|you misunderstood|that's wrong|that is wrong|not talking about that)\b/i.test(clean(message, 8000));
+  }
+
+  function correctionTopic(message) {
+    // A rejected interpretation is a memory boundary. Re-anchor only when the
+    // caller explicitly redirects the topic, rather than matching terms in a
+    // rejected phrase such as "no, not about work".
+    const normalized = clean(message, 8000);
+    const redirect = normalized.match(/\b(?:i (?:actually )?mean(?:t)?|i(?: am|'m) (?:talking|asking) about|it(?:'s| is) about|the issue is)\s+([^.!?]+)(?:[.!?]\s*)?$/);
+    if (!redirect || /^(?:not|no|neither)\b/.test(redirect[1])) return null;
+    return matchedTopic(redirect[1]);
+  }
+
   function previousTopic(history) {
     if (!Array.isArray(history)) return null;
     for (let i = Math.min(history.length, 20) - 1; i >= 0; i -= 1) {
       const item = history[i];
       if (!item || typeof item !== 'object' || item.role !== 'user') continue;
+      // Do not search past an explicit rejection of the earlier interpretation.
+      // A correction that also names a new topic may become the new anchor.
+      if (isCorrection(item.content)) return correctionTopic(item.content);
       const topic = matchedTopic(item.content);
       if (topic) return topic;
     }
@@ -287,11 +304,11 @@
     const interpersonalViolence = partnerViolence(message);
     const observedRisk = riskRoute(message);
     const route = interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
-    const current = matchedTopic(message);
+    const corrective = isCorrection(message);
+    const current = corrective ? correctionTopic(message) : matchedTopic(message);
     const prior = previousTopic(history);
     const anaphora = /\b(?:that|this|it|they|them|again|same thing)\b/i.test(message) && words(message).length <= 18;
     const directFollowup = /^(?:what (?:would|should|can) (?:you|i) (?:suggest|recommend|do)|how (?:should|can|do) i (?:respond|proceed|handle|approach)|what are my options|what next)\b/i.test(message) && words(message).length <= 16;
-    const corrective = /\b(?:not what i meant|you misunderstood|that's wrong|that is wrong|not talking about that)\b/i.test(message);
     const followup = Boolean(!current && prior && !corrective && (anaphora || directFollowup));
     const topic = current || (followup ? prior : null);
     const intent = detectIntent(message);

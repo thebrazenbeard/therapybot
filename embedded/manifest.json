@@ -5,7 +5,7 @@
   "model_kind": "deterministic-topic-intent-dialogue-state",
   "model_revision": "experimental-2026-11-04",
   "entrypoint": "index.html",
-  "assets": ["index.html", "style.css", "catalog.js", "engine.js", "council.js", "ui.js"],
+  "assets": ["index.html", "style.css", "catalog.js", "engine.js", "council.js", "conversation_adapter.js", "ui.js"],
   "trained_neural_weights": false,
   "requires_external_inference_server": false,
   "requires_network_for_chat": false,

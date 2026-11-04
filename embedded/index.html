@@ -11,6 +11,7 @@
   <script defer src="catalog.js"></script>
   <script defer src="engine.js"></script>
   <script defer src="council.js"></script>
+  <script defer src="conversation_adapter.js"></script>
   <script defer src="ui.js"></script>
 </head>
 <body>
@@ -45,7 +46,7 @@
 
         <div class="sidebar-block privacy-block">
           <div class="sidebar-heading"><span class="sidebar-icon" aria-hidden="true">02</span> Your privacy</div>
-          <p>No telemetry, network requests, local storage, cookies, or saved transcripts. Conversation history exists only in this open tab and disappears when you close or refresh it.</p>
+          <p>No telemetry or conversation uploads. The page loads its own app files; messages and Council profiles stay in page memory, with no app-managed persistent storage. Use Forget all to erase them before leaving.</p>
           <p class="small-note">Source links open external websites only if you choose to click them.</p>
         </div>
 
@@ -90,24 +91,24 @@
               <h3>Give your perspectives a voice.</h3>
               <p>Choose the names and roles yourself. These are optional reflection perspectives, not diagnoses or independent clinical authorities. No profiles leave this tab or persist after refresh.</p>
             </div>
-            <form id="member-form" autocomplete="off">
+            <div id="member-form" role="group" aria-label="Council member details">
               <div class="member-fields">
                 <label>Member name
-                  <input id="member-name" name="member-name" type="text" maxlength="48" placeholder="Example: The Skeptic" required>
+                  <input id="member-name" type="text" maxlength="48" autocomplete="off" placeholder="Example: The Skeptic" required>
                 </label>
                 <label>Role or perspective
-                  <input id="member-role" name="member-role" type="text" maxlength="100" placeholder="What does this perspective notice?" required>
+                  <input id="member-role" type="text" maxlength="100" autocomplete="off" placeholder="What does this perspective notice?" required>
                 </label>
               </div>
               <label class="member-notes-label">Optional speaking notes
-                <textarea id="member-notes" name="member-notes" rows="2" maxlength="200" placeholder="Values, boundaries, or how this perspective tends to speak"></textarea>
+                <textarea id="member-notes" rows="2" maxlength="200" placeholder="Values, boundaries, or how this perspective tends to speak"></textarea>
               </label>
               <div class="member-form-actions">
-                <button id="save-member" class="council-primary" type="submit">Add member</button>
+                <button id="save-member" class="council-primary" type="button">Add member</button>
                 <button id="cancel-member-edit" class="council-secondary" type="button" hidden>Cancel edit</button>
               </div>
               <div id="member-feedback" class="form-feedback" role="status" aria-live="polite"></div>
-            </form>
+            </div>
             <ul id="member-list" class="member-list" aria-label="Members of my Inner Council"></ul>
           </section>
 
@@ -125,19 +126,20 @@
           </div>
 
           <div class="composer">
-            <form id="conversation-form" method="post" autocomplete="off">
+            <noscript><p class="noscript-notice">This experimental conversation needs JavaScript. With scripts off, Send and Council controls do not operate or submit your text.</p></noscript>
+            <div id="conversation-form" role="group" aria-label="Conversation composer">
               <label class="field-label" for="message">Your message</label>
-              <textarea id="message" name="message" rows="3" maxlength="4000" placeholder="What would you like to untangle?" aria-describedby="message-hint" required></textarea>
+              <textarea id="message" rows="3" maxlength="4000" placeholder="What would you like to untangle?" aria-describedby="message-hint" required></textarea>
               <div class="composer-footer">
                 <div class="controls">
-                  <label for="style">Tone <select id="style" name="style"><option value="direct">Direct</option><option value="warm">Warm</option><option value="analytical">Analytical</option></select></label>
-                  <label for="depth">Depth <select id="depth" name="depth"><option value="brief">Brief</option><option value="balanced" selected>Balanced</option><option value="deep">Deep</option></select></label>
+                  <label for="style">Tone <select id="style"><option value="direct">Direct</option><option value="warm">Warm</option><option value="analytical">Analytical</option></select></label>
+                  <label for="depth">Depth <select id="depth"><option value="brief">Brief</option><option value="balanced" selected>Balanced</option><option value="deep">Deep</option></select></label>
                 </div>
                 <button id="send-message" type="button" class="send-button">Send <span aria-hidden="true">↗</span></button>
               </div>
               <p class="message-hint" id="message-hint">Send or press Ctrl/⌘ + Enter. Try <code>Council:</code>, <code>Solo &lt;name&gt;:</code>, <code>Integrate:</code>, or <code>Containment:</code>. All modes are experimental; nothing is saved.</p>
               <div id="form-feedback" class="form-feedback" role="status" aria-live="polite"></div>
-            </form>
+            </div>
           </div>
         </section>
 

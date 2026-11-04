@@ -21,7 +21,7 @@
 </head>
 <body>
 <div class="app">
-  <aside class="side"><div class="brand"><span class="mark" aria-hidden="true">✳</span><span>TherapyBot<small>Space for reflection</small></span></div><nav class="nav" aria-label="Sections"><button class="active" data-tab="talk" aria-controls="view-talk" aria-current="page">◌ &nbsp; Conversation</button><button data-tab="journal" aria-controls="view-journal">▤ &nbsp; Journal</button><button data-tab="records" aria-controls="view-records">⌕ &nbsp; Records</button><button data-tab="sources" aria-controls="view-sources">▧ &nbsp; Sources</button><button data-tab="vault" aria-controls="view-vault">◇ &nbsp; My vault</button></nav><p class="side-note">TherapyBot is a local AI reflection tool, not licensed therapy, diagnosis, treatment, or an emergency service. Records are saved only when you choose.</p></aside>
+  <aside class="side"><div class="brand"><span class="mark" aria-hidden="true">✳</span><span>TherapyBot<small>Space for reflection</small></span></div><nav class="nav" aria-label="Sections"><button class="active" data-tab="talk" aria-controls="view-talk" aria-current="page">◌ &nbsp; Conversation</button><button data-tab="journal" aria-controls="view-journal">▤ &nbsp; Journal</button><button data-tab="records" aria-controls="view-records">⌕ &nbsp; Records</button><button data-tab="sources" aria-controls="view-sources">▧ &nbsp; Sources</button><button data-tab="vault" aria-controls="view-vault">◇ &nbsp; My vault</button></nav><p class="side-note"><a href="/embedded/">Try the offline embedded guide and Inner Council</a>. This separate, experimental page needs no model service. Its temporary conversation and Council roster are not saved to or read from your vault.<br><br>TherapyBot is a local AI reflection tool, not licensed therapy, diagnosis, treatment, or an emergency service. Records are saved only when you choose.</p></aside>
   <main>
     <header class="top"><div><h1 id="page-title" tabindex="-1">A place to think.</h1><p class="subtitle" id="page-subtitle">No questionnaire. Start wherever you are.</p></div><div class="badges"><span class="badge" id="model-badge" role="status" aria-live="polite">Model: checking…</span><span class="badge" id="vault-badge" role="status" aria-live="polite">Vault: checking…</span></div></header>
     <aside class="safety-strip" aria-label="Immediate help resources"><strong>Need immediate help?</strong> TherapyBot cannot respond to emergencies. Contact local emergency services if someone may be in danger. In the U.S., <a href="https://988lifeline.org/get-help/" target="_blank" rel="noopener noreferrer">call or text 988</a> for crisis support.</aside>
@@ -40,6 +40,8 @@
   let session = null;
   let status = null;
   let chatEpoch = 0;
+  let vaultBusy = false;
+  let statusRequestSeq = 0;
   const recentContext = []; // Ephemeral: never persisted, only the last six in-tab turns.
   const titles = {talk:['A place to think.','No questionnaire. Start wherever you are.'],journal:['Your journal.','A little clarity, captured on your terms.'],records:['Your history.','What you choose to keep remains yours.'],sources:['Reference sources.','Follow the evidence. Keep the questions.'],vault:['Your vault.','Your records, your decision.']};
   const feedback = (id,message,error=false) => {const el=$(id);el.textContent=message;el.classList.toggle('error',error);};
@@ -71,12 +73,12 @@
     $('vault-badge').textContent='Vault: '+(session?'unlocked in this tab':status?.storage==='unlocked'?'re-enter passphrase':'locked');
     $('chat-save').disabled=!session;if(!session)$('chat-save').checked=false;
     $('chat-save-help').textContent=session?'Saving is optional; chat stays unsaved if this box is unchecked.':'Saving requires unlocking My vault. Unsaved conversation works without a vault.';
-    $('lock-button').disabled=!session;$('backup-button').disabled=!session;
+    $('lock-button').disabled=!session||vaultBusy;$('unlock-button').disabled=vaultBusy;$('backup-button').disabled=!session||vaultBusy;
     $('delete-button').disabled=!session||$('delete-confirm').value!=='DELETE';
     $('unlock-button').textContent=status?.initialized?'Unlock vault':'Set passphrase & initialize';
     $('passphrase-label').textContent=status?.initialized?'Vault passphrase':'Create vault passphrase (minimum 12 characters)';
   }
-  async function loadStatus(){try{status=await api('/api/status');updateBadges();}catch(error){$('model-badge').textContent='Model: status unavailable';feedback('vault-feedback',error.message,true);}}
+  async function loadStatus(){const seq=++statusRequestSeq;try{const next=await api('/api/status');if(seq!==statusRequestSeq)return null;status=next;updateBadges();return next;}catch(error){if(seq!==statusRequestSeq)return null;$('model-badge').textContent='Model: status unavailable';feedback('vault-feedback',error.message,true);return null;}}
   function addBubble(speaker,message,citations=[]){
     $('conversation-empty')?.remove();const bubble=node('div','bubble '+(speaker==='You'?'me':'bot'));bubble.append(node('span','speaker',speaker),document.createTextNode(String(message||'')));
     if(Array.isArray(citations)&&citations.length){const footer=node('div','citations');for(const citation of citations){const link=sourceLink(citation);if(link)footer.append(link);}if(footer.childNodes.length)bubble.append(footer);}
@@ -102,12 +104,30 @@
     finally{$('chat-send').disabled=false;$('chat-message').focus();}
   });
   $('unlock-form').addEventListener('submit',async event=>{
-    event.preventDefault();try{const passphrase=$('passphrase').value;const result=await api('/api/unlock',{method:'POST',data:{passphrase}});if(!result.session)throw Error('No private session received from vault.');session=result.session;$('passphrase').value='';feedback('vault-feedback','Vault unlocked for this tab.');await loadStatus();}
+    event.preventDefault();if(vaultBusy)return;vaultBusy=true;updateBadges();
+    try{const passphrase=$('passphrase').value;const result=await api('/api/unlock',{method:'POST',data:{passphrase}});if(!result.session)throw Error('No private session received from vault.');session=result.session;$('passphrase').value='';feedback('vault-feedback','Vault unlocked for this tab.');await loadStatus();}
     catch(error){feedback('vault-feedback',error.message,true);}
+    finally{vaultBusy=false;updateBadges();}
   });
+  function clearPrivateView(){
+    session=null;clearVisibleChat();$('journal-text').value='';$('journal-mood').value='';$('search-query').value='';$('delete-confirm').value='';
+    feedback('journal-feedback','');feedback('search-feedback','');clear($('journal-list'));clear($('history-list'));clear($('search-list'));
+    $('journal-list').append(node('p','help','Unlock the vault to view entries.'));$('history-list').append(node('p','help','Unlock the vault to view history.'));
+  }
   $('lock-button').addEventListener('click',async()=>{
-    try{await api('/api/lock',{method:'POST',data:{},privateAccess:true});feedback('vault-feedback','Vault locked.');}catch(error){feedback('vault-feedback',error.message,true);}
-    finally{session=null;clearVisibleChat();$('journal-text').value='';$('journal-mood').value='';$('search-query').value='';$('delete-confirm').value='';feedback('journal-feedback','');feedback('search-feedback','');clear($('journal-list'));clear($('history-list'));clear($('search-list'));$('journal-list').append(node('p','help','Unlock the vault to view entries.'));$('history-list').append(node('p','help','Unlock the vault to view history.'));await loadStatus();updateBadges();}
+    if(vaultBusy||!session)return;vaultBusy=true;updateBadges();
+    let requestError=null;
+    try{const result=await api('/api/lock',{method:'POST',data:{},privateAccess:true});if(result.storage!=='locked')throw Error('Lock response did not confirm a locked state.');}
+    catch(error){requestError=error;}
+    finally{
+      // Even if the request failed, discard local access to private records.
+      // Never assert "locked" solely because an old HTTP request succeeded.
+      clearPrivateView();
+      const observed=await loadStatus();
+      if(observed?.storage==='locked')feedback('vault-feedback','Vault locked.');
+      else feedback('vault-feedback','Vault lock state could not be confirmed. The vault may remain unlocked; check the local status before leaving this device.'+(requestError?' '+requestError.message:''),true);
+      vaultBusy=false;updateBadges();
+    }
   });
   function renderItems(target,items,renderer,emptyText){clear($(target));if(!Array.isArray(items)||items.length===0){$(target).append(node('p','help',emptyText));return;}for(const item of items)$(target).append(renderer(item));}
   async function loadJournal(){const requestSession=session;try{const data=await api('/api/journal',{privateAccess:true});if(!requestSession||requestSession!==session)return;renderItems('journal-list',data.entries,item=>{const el=node('article','entry');el.append(node('time','',date(item.created_at)+(item.mood===null||item.mood===undefined?'':' · Mood '+item.mood)),node('p','',item.content||''));return el;},'No saved entries yet.');}catch(error){if(requestSession===session)feedback('journal-feedback',error.message,true);}}
@@ -118,9 +138,9 @@
   $('search-form').addEventListener('submit',async event=>{event.preventDefault();const requestSession=session;try{const q=$('search-query').value.trim();if(!q)return;const data=await api('/api/search?q='+encodeURIComponent(q),{privateAccess:true});if(!requestSession||requestSession!==session)return;renderItems('search-list',data.results,item=>{const el=node('article','entry');const content=item.content;const display=content&&typeof content==='object'&&!Array.isArray(content)&&('user' in content||'assistant' in content)?`You: ${content.user||''}\n\nTherapyBot: ${content.assistant||''}`:typeof content==='string'?content:String(item.text||item.snippet||item.user||JSON.stringify(content??item));el.append(node('time','',date(item.created_at)),node('p','',display));return el;},'No results.');feedback('search-feedback',`${Array.isArray(data.results)?data.results.length:0} results shown.`);}catch(error){if(requestSession===session)feedback('search-feedback',error.message,true);}});
   async function loadSources(){try{const data=await api('/api/sources');const items=data.sources||[];$('source-count').textContent=`${items.length} source${items.length===1?'':'s'}`;renderItems('source-list',items,item=>{const el=node('article','entry source');const anchor=sourceLink(item);el.append(anchor||node('strong','',item.title||'Untitled source'));if(item.evidence_type||item.kind)el.append(node('small','',item.evidence_type||item.kind));return el;},'No reference sources are indexed yet.');}catch(error){$('source-count').textContent='Sources unavailable';clear($('source-list'));$('source-list').append(node('p','help',error.message));}}
   $('source-refresh').addEventListener('click',loadSources);
-  $('backup-button').addEventListener('click',async()=>{try{const blob=await api('/api/backup',{privateAccess:true,binary:true});const href=URL.createObjectURL(blob);const link=node('a');link.href=href;link.download='therapybot-encrypted-backup.sqlite';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),15000);feedback('records-feedback','Encrypted backup download started. Keep your passphrase.');}catch(error){feedback('records-feedback',error.message,true);}});
+  $('backup-button').addEventListener('click',async()=>{const requestSession=session;try{const blob=await api('/api/backup',{privateAccess:true,binary:true});if(!requestSession||requestSession!==session)return;const href=URL.createObjectURL(blob);const link=node('a');link.href=href;link.download='therapybot-encrypted-backup.sqlite';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),15000);feedback('records-feedback','Encrypted backup download started. Keep your passphrase.');}catch(error){if(requestSession===session)feedback('records-feedback',error.message,true);}});
   $('delete-confirm').addEventListener('input',updateBadges);
-  $('delete-button').addEventListener('click',async()=>{if($('delete-confirm').value!=='DELETE')return;try{const result=await api('/api/records',{method:'DELETE',privateAccess:true,confirmDelete:true});$('delete-confirm').value='';updateBadges();feedback('records-feedback',`Records deleted: ${result.deleted??'confirmed'}.`);await loadHistory();await loadJournal();}catch(error){feedback('records-feedback',error.message,true);}});
+  $('delete-button').addEventListener('click',async()=>{if($('delete-confirm').value!=='DELETE')return;const requestSession=session;try{const result=await api('/api/records',{method:'DELETE',privateAccess:true,confirmDelete:true});if(!requestSession||requestSession!==session)return;$('delete-confirm').value='';updateBadges();feedback('records-feedback',`Records deleted: ${result.deleted??'confirmed'}.`);await loadHistory();await loadJournal();}catch(error){if(requestSession===session)feedback('records-feedback',error.message,true);}});
   loadStatus();loadSources();
 })();
 </script>

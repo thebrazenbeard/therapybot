@@ -22,21 +22,21 @@
       summary: 'Unusual experiences can have several possible explanations; a description alone cannot establish a diagnosis.'
     },
     {
-      id: 'nice-self-harm',
+      id: 'nice-self-harm-ng225',
       title: 'NICE NG225 — Self-harm',
       url: 'https://www.nice.org.uk/guidance/ng225',
       topics: ['crisis'],
       summary: 'Clinical guidance calls for individual assessment and cautions against using risk scales to predict future suicide.'
     },
     {
-      id: 'who-mental-health',
+      id: 'who-world-mental-health-2022',
       title: 'WHO — World Mental Health Report',
       url: 'https://www.who.int/publications/i/item/9789240049338',
       topics: ['work', 'access', 'social', 'mood', 'trauma'],
       summary: 'Mental health is shaped by individual, social, economic and structural circumstances together.'
     },
     {
-      id: 'cdc-connection',
+      id: 'cdc-social-connectedness',
       title: 'CDC — Social Connection',
       url: 'https://www.cdc.gov/social-connectedness/about/',
       topics: ['relationship', 'isolation', 'social'],
