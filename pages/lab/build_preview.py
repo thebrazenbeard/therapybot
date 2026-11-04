@@ -8,7 +8,7 @@ from pathlib import Path
 
 LAB = Path(__file__).resolve().parent
 REPO = LAB.parents[1]
-LAB_FILES = ("index.html", "lab.css", "lab.js", "neural.js")
+LAB_FILES = ("index.html", "lab.css", "lab.js", "rules_fallback.js", "neural.js")
 RUNTIME_FILES = ("catalog.js", "engine.js", "conversation_adapter.js")
 WLLAMA_ASSETS = {
     "@wllama/wllama/esm/index.js": ("runtime/wllama/esm/index.js", "e5506753e41a59c11f61f2c52422045be9fc76e32a7e47f037aaad5df4ec723e"),

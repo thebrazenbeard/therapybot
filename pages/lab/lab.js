@@ -8,6 +8,7 @@
   const consent = get('model-consent'), modelLoad = get('model-load');
   const modelCancel = get('model-cancel'), modelStatus = get('model-status');
   let session = null, busy = false, paused = false, ticket = 0;
+  let rulesAid = null;
   let transcript = [], acuteContext = false, modelAbort = null, modelLoading = false;
 
   function append(role, message, warning) {
@@ -67,6 +68,7 @@
       status.textContent = 'Missing browser runtime; cannot converse.';
       return;
     }
+    rulesAid = window.TherapyBotRulesFallback?.create() || null;
     session = window.TherapyBotConversationAdapter.createSession({
       providers: [{
         id: 'embedded-semantic', kind: 'bounded-semantic', execution: 'browser-local',
@@ -85,6 +87,7 @@
   function reset() {
     ticket++;
     session?.clear();
+    rulesAid?.clear();
     paused = false;
     transcript = [];
     acuteContext = false;
@@ -96,6 +99,7 @@
   function pause() {
     ticket++;
     session?.clear();
+    rulesAid?.clear();
     paused = true;
     say('Replies paused. A generation already running may finish in memory, but its reply will be discarded. Select Resume replies to continue.');
     refresh();
@@ -182,7 +186,14 @@
         const note = neuralMode && result.responseOrigin === 'selected-provider'
           ? 'Experimental 135M model output, permitted by a limited lexical filter—not clinical validation.'
           : '';
-        say(result.reply,note);
+        // Only explicit requests on normal, rules-only unknown-topic turns may
+        // get a bounded clarification. This is NOT a safety classification;
+        // resident warnings and all neural replies stay unchanged.
+        const scaffold = !neuralMode && result.responseOrigin === 'selected-provider'
+          ? rulesAid?.respond(message, {
+              safety:result.safety, supportedTopic:result.presentation?.supportedTopic
+            }) : null;
+        say(scaffold || result.reply, note);
       } else if (neuralMode && result?.status === 'suppressed') {
         say('The experimental output filter suppressed this unqualified model reply.');
       } else {

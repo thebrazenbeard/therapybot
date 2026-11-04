@@ -2,6 +2,12 @@
 
 This is an **unreleased experiment**, not a therapist, crisis service, or qualified safety classifier. Rules-based conversation is the default. Only after the visitor explicitly checks a 105 MB consent box and clicks the model-load button does it attempt an experimental local neural model. No account, API key, or visitor installation is required for a hypothetical published static page. **Do not merge into the published Pages tree** until separate release approval; the current Pages workflow could publish the lab if merged.
 
+## Narrow rules-only conversation aid (experimental)
+
+When the bundled resident engine reports a normal, unsupported-topic reply, a separate tiny rules aid can offer *different clarifying questions* for explicitly requested planning, brainstorming, comparison, note organization, research, troubleshooting, outlining, or decision structure. It does not infer an unstated goal, check factual accuracy, or generate an original solution; absent clear intent it retains the resident engine's original generic fallback. The aid never overrides resident non-normal routes and never reviews neural output. Its lexical abstention list is not a danger classifier.
+
+Synthetic offline 8-turn held-out dialog: the original rules engine returned **1 distinct reply**; with the aid, **5 distinct replies**, **4 of 8 turns changed**, and **4 turns still used the generic fallback**. This is a bounded UX improvement, not a clinical efficacy or safety test. Real Edge/Firefox testing of this particular branch remains outstanding. Release HOLD remains in force.
+
 ## Reproducible isolated build
 
 From the repository root, stage the rules-only/default UI into a new empty directory outside Git:
