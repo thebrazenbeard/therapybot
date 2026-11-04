@@ -19,6 +19,14 @@ There is **no** neural GGUF inference or automatic model download in this slice.
 The plan for optional genuine in-browser GGUF via Wllama is in
 `../docs/REPOSITORY_RESIDENT_MODEL.md`.
 
+The scripted rules are English-only. Some obvious non-English messages now
+receive an explicit limitation notice and cannot enter Inner Council mode;
+this is a partial heuristic, **not** a language detector, translation service,
+or reliable safety screen. Unsupported messages can still escape detection,
+and quoted foreign phrases in English can trigger over-cautious abstention.
+Known danger cues take precedence, but the overall risk router remains
+unvalidated. Do not infer that a message is safe from a normal route.
+
 ## Development checks
 
 ```sh

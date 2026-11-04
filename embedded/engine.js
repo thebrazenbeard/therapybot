@@ -130,10 +130,11 @@
     }
   ]);
 
-  const UNKNOWN = 'I do not have enough context to give a trustworthy interpretation. I can help examine a practical problem, a relationship, an emotion, or a question about meaning. Which part do you want to start with?';
+  const UNKNOWN = 'I do not have enough context to give a trustworthy interpretation. These experimental rules cover only limited English topics; I cannot reliably interpret other languages or assess safety. I can help examine a practical problem, a relationship, an emotion, or a question about meaning. Which part do you want to start with?';
   const LISTEN = 'You can vent. I will stay with what you have actually said rather than rushing into solutions.';
   const URGENT = 'I cannot assess danger from a chat message. If someone may be in immediate danger, contact local emergency services now. In the U.S., you can call or text 988 for crisis support. If this describes the past, a hypothetical, or someone else, you can clarify; I will not silently assume otherwise.';
   const CONCERN = 'I want to take that seriously without deciding what you meant. Are you describing a current concern, a past experience, or a hypothetical question?';
+  const LANGUAGE_LIMIT = 'This experimental version currently supports English only. Your message may use another language. I cannot reliably understand it or check it for safety. If someone may be in immediate danger, contact local emergency services. You can try describing the situation in English if you choose; I will not guess what you meant.';
 
   function clean(value, limit) {
     return typeof value === 'string' ? value.slice(0, limit).normalize('NFKC').replace(/[\u2018\u2019]/g, "'").toLowerCase() : '';
@@ -141,6 +142,38 @@
 
   function words(value) {
     return clean(value, 8000).match(/[\p{L}\p{N}]+/gu) || [];
+  }
+
+  // This conservative signal is NOT language identification or translation.
+  // Abstain on sustained non-Latin writing, not one foreign letter, numerical
+  // symbols, names or short quotations in English. For Latin-script languages
+  // require two Spanish phrase cues; other languages may reach UNKNOWN, whose
+  // explicit English-only disclosure does not assert that they are safe.
+  // Known danger cues must be evaluated before this partial heuristic.
+  function unsupportedLanguageSignal(message) {
+    const text = clean(message, 8000).replace(/^(?:council|integrate|containment)\s*:\s*/, '');
+    const foreignScript = /[\u0370-\u03ff\u0400-\u052f\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\u0900-\u097f\u0e00-\u0e7f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u;
+    let letters = 0;
+    let foreignLetters = 0;
+    for (const character of text) {
+      if (!/\p{L}/u.test(character)) continue;
+      letters += 1;
+      if (foreignScript.test(character)) foreignLetters += 1;
+    }
+    // Short utterances may express immediate danger in only a few characters.
+    // Requiring a script majority avoids treating a stray symbol in otherwise
+    // English text as a language change; the 3-letter floor is intentionally
+    // precautionary and still not sufficient for reliable language detection.
+    if (foreignLetters >= 3 && foreignLetters / letters >= 0.7) return true;
+    const bounded = function (expression) {
+      return new RegExp('(?:^|[^\\p{L}])(?:' + expression + ')(?=$|[^\\p{L}])', 'u').test(text);
+    };
+    const spanishMarkers = [
+      'me siento', 'tengo miedo', 'necesito ayuda', 'no s[eé]',
+      'qu[eé] (?:hago|hacer)', 'mi pareja',
+      'estoy (?:muy )?(?:triste|asustad[oa]|deprimid[oa])', 'no puedo'
+    ];
+    return spanishMarkers.filter(bounded).length >= 2;
   }
 
   function riskRoute(message) {
@@ -272,8 +305,8 @@
 
   function detectIntent(message) {
     const text = clean(message, 8000);
-    if (/\b(?:just vent|only vent|need to vent|no advice|don't want advice|do not want advice|not looking for advice)\b/.test(text)) return 'listen';
-    if (/\b(?:what should i do|what can i do|how should i|next step|my options|how do i)\b/.test(text)) return 'action';
+    if (/\b(?:just vent|only vent|need to vent|(?:just|only) want to vent|want to vent|no advice|don't want advice|do not want advice|not looking for advice)\b/.test(text)) return 'listen';
+    if (/\b(?:what should i do|what can i do|how should i|next step|my options|how do i|(?:need|want) (?:practical )?options)\b/.test(text)) return 'action';
     if (/\b(?:why|how come|cause|explain|difference between|what does it mean)\b/.test(text)) return 'explain';
     return 'explore';
   }
@@ -304,16 +337,21 @@
     const interpersonalViolence = partnerViolence(message);
     const observedRisk = riskRoute(message);
     const route = interpersonalViolence && observedRisk === 'normal' ? 'concern' : observedRisk;
+    // English-only rule tables cannot safely interpret detected non-English
+    // input. Keep known danger routes authoritative and suppress Council mode
+    // by returning a non-normal route on an unsupported-language abstention.
+    const languageLimited = route === 'normal' && unsupportedLanguageSignal(message);
     const corrective = isCorrection(message);
     const current = corrective ? correctionTopic(message) : matchedTopic(message);
     const prior = previousTopic(history);
     const anaphora = /\b(?:that|this|it|they|them|again|same thing)\b/i.test(message) && words(message).length <= 18;
     const directFollowup = /^(?:what (?:would|should|can) (?:you|i) (?:suggest|recommend|do)|how (?:should|can|do) i (?:respond|proceed|handle|approach)|what are my options|what next)\b/i.test(message) && words(message).length <= 16;
-    const followup = Boolean(!current && prior && !corrective && (anaphora || directFollowup));
+    const preferenceFollowup = /\b(?:need|want) (?:practical )?options\b/i.test(message) && words(message).length <= 16;
+    const followup = Boolean(!current && prior && !corrective && (anaphora || directFollowup || preferenceFollowup));
     const topic = current || (followup ? prior : null);
     const intent = detectIntent(message);
-    const state = { topic: topic ? topic.key : null, followup };
-    const safety = { route, coverage: 'unvalidated' };
+    const state = { topic: languageLimited ? null : topic ? topic.key : null, followup: languageLimited ? false : followup };
+    const safety = { route: languageLimited ? 'concern' : route, coverage: 'unvalidated' };
     let reply;
     let uncertainty;
 
@@ -326,12 +364,18 @@
     } else if (route === 'concern') {
       reply = CONCERN;
       uncertainty = 'A lexical cue triggered clarification; this is not a clinical risk assessment.';
+    } else if (languageLimited) {
+      reply = LANGUAGE_LIMIT;
+      uncertainty = 'A partial unsupported-language heuristic prompted abstention; it cannot reliably identify the language, understand meaning, or assess safety.';
     } else if (!message) {
       reply = 'What would you like to think through?';
       uncertainty = 'No message was supplied.';
     } else if (/^(?:hi|hello|hey|good morning|good evening)[.!?\s]*$/i.test(message)) {
       reply = 'Hello. What would you like to talk about?';
       uncertainty = 'Greeting only; no topic interpreted.';
+    } else if (corrective && !current) {
+      reply = 'I misunderstood. What did I get wrong, and what would you like me to focus on instead?';
+      uncertainty = 'An explicit correction rejected earlier topic context. I am asking for clarification rather than reviving it.';
     } else if (intent === 'listen') {
       reply = LISTEN + '\n\nWhat would you like me to hear first?';
       uncertainty = 'The request to listen was explicit; no details beyond the supplied message were inferred.';
@@ -358,9 +402,9 @@
     return {
       reply,
       engine: 'embedded-semantic',
-      supportedTopic: Boolean(topic),
+      supportedTopic: Boolean(topic && !languageLimited),
       uncertainty,
-      sources: sourceLinks(topic, route, interpersonalViolence),
+      sources: languageLimited ? [] : sourceLinks(topic, route, interpersonalViolence),
       state,
       safety
     };

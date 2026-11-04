@@ -290,10 +290,17 @@ async function run() {
       assert.deepEqual(first.speakers, ['Perspective 1', 'Perspective 2']);
       assert.deepEqual(first.userLabels, ['Your label: Strategist', 'Your label: Guardian']);
       assert.match(first.text, /not evidence of separate people or diagnoses/i);
-      const second = await send(page, 'If I speak plainly but calmly, what would each perspective want me to remember?');
+      const second = await send(page, 'If I speak plainly but calmly to my colleague about that boundary, what would each perspective want me to remember?');
       assert.deepEqual(second.speakers, ['Perspective 1', 'Perspective 2']);
       assert.equal(await count(page, '.message--user'), 2);
       await screenshot(page, artifactDir, '02-council-conversation.png');
+    });
+
+    await test('Unverified Council question abstains instead of inventing a debate', async () => {
+      const answer = await send(page, 'Council: qwerty unknown situation xyz');
+      assert.deepEqual(answer.speakers, []);
+      assert.match(answer.text, /cannot establish a supported topic/i);
+      assert.equal(answer.warning, true);
     });
 
     await test('Typed Solo command addresses only a configured member', async () => {
