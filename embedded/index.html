@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="A development-only, repository-contained TherapyBot semantic conversation experiment. No accounts, servers, telemetry, or saved conversations.">
+  <meta name="description" content="A development-only, rules-only TherapyBot conversation experiment. No neural model inference, accounts, telemetry, or saved conversations.">
   <title>TherapyBot · Embedded conversation lab</title>
   <link rel="stylesheet" href="style.css">
   <script defer src="catalog.js"></script>
@@ -56,11 +56,11 @@
       <main id="main" class="main-content">
         <div class="main-heading">
           <div>
-            <div class="eyebrow eyebrow--accent"><span class="live-dot" aria-hidden="true"></span> LOCAL EXPERIMENT · NO EXTERNAL INFERENCE</div>
+          <div class="eyebrow eyebrow--accent"><span class="live-dot" aria-hidden="true"></span> RULES-ONLY DEMO · NO EXTERNAL INFERENCE</div>
             <h1>Make some <em>room</em> to think.</h1>
             <p class="lead">Explore a situation at your own pace. This early engine can follow a few structured topics and ask grounded questions; it cannot replace a person or professional care.</p>
           </div>
-          <div class="engine-card"><span class="engine-label">ACTIVE ENGINE</span><span id="engine-status" class="engine-status" role="status" aria-live="polite">Checking bundled engine…</span><span class="engine-subtitle">No separate model server</span></div>
+          <div class="engine-card"><span class="engine-label">ACTIVE ENGINE</span><span id="engine-status" class="engine-status" role="status" aria-live="polite">Checking bundled rules…</span><span class="engine-subtitle">No neural inference is active in this build</span></div>
         </div>
 
         <div class="safety-alert" aria-label="Immediate help information">

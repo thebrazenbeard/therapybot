@@ -213,7 +213,9 @@ async function run() {
       request.continue().catch(() => {});
     });
     await page.goto(origin + '/', { waitUntil: 'networkidle0', timeout: 20000 });
-    await page.waitForFunction(() => document.querySelector('#engine-status')?.textContent?.includes('ready'));
+    // The bundled engine is loaded, but this is a rules-only prototype, not
+    // neural inference. Do not wait for the retired misleading "ready" copy.
+    await page.waitForFunction(() => document.querySelector('#engine-status')?.textContent?.includes('Rules only · no neural model'));
 
     await test('Fresh tab has no Inner Council roster', async () => {
       assert.match(await page.$eval('#council-count', (element) => element.textContent), /No members defined/);
@@ -282,7 +284,7 @@ async function run() {
       }
     });
 
-    await test('Convene and conduct a live two-turn Council exchange', async () => {
+    await test('Convene Council, then abstain rather than fabricate an unsupported follow-up', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#convene-council', (element) => element.getAttribute('aria-pressed')), 'true');
       assert.equal(await page.$eval('#council-setup', (element) => element.hidden), true,
@@ -292,13 +294,15 @@ async function run() {
       assert.deepEqual(first.userLabels, ['Your label: Strategist', 'Your label: Guardian']);
       assert.match(first.text, /not evidence of separate people or diagnoses/i);
       const second = await send(page, 'If I speak plainly but calmly, what would each perspective want me to remember?');
-      assert.deepEqual(second.speakers, ['Perspective 1', 'Perspective 2']);
+      assert.deepEqual(second.speakers, [], 'an unsupported follow-up must not invent Council voices');
+      assert.match(second.meta, /Safety route: unknown/);
+      assert.match(second.feedback, /Safety interpretation unavailable/);
       assert.equal(await count(page, '.message--user'), 2);
       await screenshot(page, artifactDir, '02-council-conversation.png');
     });
 
     await test('Typed Solo command addresses only a configured member', async () => {
-      const answer = await send(page, 'Solo Strategist: What is the next practical question to ask?');
+      const answer = await send(page, 'Solo Strategist: I want to set a clear boundary with a colleague. What am I overlooking?');
       assert.deepEqual(answer.speakers, ['Perspective 1']);
       assert.match(answer.text, /user-defined lens/i);
     });
@@ -321,7 +325,7 @@ async function run() {
       const answer = await send(page, 'How can I tell a healthy work boundary from avoidance?');
       assert.equal(answer.speakers.length, 0);
       assert.equal(answer.warning, false);
-      assert.match(answer.meta, /Experimental · not clinically validated/);
+      assert.match(answer.meta, /Rules-only response · not clinically validated/);
       assert(answer.text.length > 50, 'Expected a nonempty ordinary response.');
     });
 
