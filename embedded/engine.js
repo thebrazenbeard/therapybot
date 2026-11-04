@@ -163,14 +163,28 @@
       const quantifiedMedication = /\b(?:i|we)\s+(?:(?:just|already|recently)\s+)?(?:took|swallowed|ingested|ate)\s+(?:\d{2,}|dozens? of)\s+(?:\w+\s+){0,2}(?:painkillers?|pills?|tablets?|capsules?|medications?|pain ?medications?)\b/.test(clause) &&
         /\b(?:just|now|today|tonight|recently|already|this morning|this evening)\b/.test(clause);
       const acuteOverdose = /\b(?:i|we)\s+(?:just|already|recently)?\s*overdosed\b/.test(clause);
+      const recentFistful = /\b(?:took|swallowed|ingested|ate)\s+(?:a|two|three|several|multiple)?\s*(?:fistfuls?|handfuls?)\b/.test(clause) &&
+        /\b(?:pills?|tablets?|medication|painkillers?|fistfuls?)\b/.test(text) &&
+        /\b(?:just|already|minutes? ago|hours? ago|now|tonight|today)\b/.test(text);
       const acuteBleeding = /\b(?:bleeding (?:badly|heavily|profusely)|blood (?:is )?(?:pouring|gushing)|can't stop bleeding|cannot stop bleeding)\b/.test(clause) &&
         /\b(?:now|right now|just|already|my|me|i|child|son|daughter|partner|friend|blood)\b/.test(clause);
+      const bandageSoaking = /\bblood\b.{0,50}\b(?:soak(?:ing|s)? through|saturat(?:ing|es))\b.{0,45}\b(?:towels?|bandages?|dressings?|clothes?)\b/.test(clause);
       const acuteBreathing = /\b(?:cannot|can't|not)\s+(?:breathe|breathing)\b/.test(clause);
       const acuteInjury = /\b(?:i (?:have )?(?:already|just)\s+)?(?:slashed|cut|stabbed)\s+my\s+(?:wrist|wrists)\b.{0,100}\b(?:bleeding|blood|won't stop|cannot stop)\b/.test(clause);
       const weaponAtSelf = /\b(?:i (?:have|am holding)|there is)\b.{0,55}\b(?:loaded\s+)?(?:gun|firearm|pistol)\b.{0,55}\b(?:pointed|aimed|against|at)\b.{0,20}\b(?:my|me)\b/.test(clause) ||
         /\b(?:gun|firearm|pistol)\b.{0,50}\b(?:pointed|aimed|against)\s+(?:at\s+)?my\s+(?:head|chest|temple)\b/.test(clause);
       const imminentJump = /\b(?:i\s+(?:have\s+)?(?:decided|plan|intend|want)|i'm\s+(?:going|about)|i\s+am\s+(?:going|about))\b.{0,30}\b(?:jump|throw myself)\s+(?:off|from)\s+(?:a|the|this)?\s*(?:bridge|roof|building|cliff)\b/.test(clause);
+      const atLedge = /\b(?:i\s+am|i'm)\s+(?:sitting|standing|perched)\b.{0,55}\b(?:bridge railing|roof edge|ledge|edge of (?:a|the) (?:bridge|roof|building))\b.{0,100}\b(?:let go|jump|step off|fall)\b/.test(clause);
+      const garageCarbonMonoxide = /\b(?:brother|sister|partner|spouse|friend|mother|father|child|son|daughter|he|she|they)\b.{0,135}\b(?:locked|shut|closed)\b.{0,75}\bgarage\b.{0,65}\bengine running\b/.test(clause) &&
+        /\b(?:farewell|goodbye|suicide|not coming back|end it)\b/.test(text);
       const frighteningHarmVoice = /\b(?:voice|part of me|voices)\b.{0,95}\b(?:wants?|tells?|urges?|commands?|ordering|giving me commands?)\b.{0,55}\b(?:hurt|kill|shoot|stab)\b/.test(clause);
+      const frighteningCommand = /\b(?:someone inside my head|a voice|voices?)\b.{0,95}\b(?:tells?|orders?|commands?|urges?)\s+me\s+to\s+(?:hurt|kill|shoot|stab|attack)\b/.test(clause);
+      const possibleOtherHarm = /\b(?:i|part of me)\s+(?:might|could)\s+(?:kill|shoot|stab|attack|hurt)\b.{0,45}\b(?:neighbor|person|partner|child|anyone|someone|him|her|them)\b/.test(clause) ||
+        /\b(?:i\s+)?(?:will not|won't|cannot|can't)\s+be able to stop myself from\s+(?:attacking|hurting|killing|shooting|stabbing)\b/.test(clause);
+      const ominousObedience = /\b(?:shadow|voice|part of me)\b.{0,90}\b(?:deserve|punishment|punish)\b.{0,75}\b(?:tonight|now|today)\s+i\s+will\s+obey\b/.test(clause);
+      const selfErasure = /\b(?:i|me|myself)\b.{0,100}\b(?:burden|disappear forever|vanish forever)\b/.test(clause) &&
+        /\b(?:burden|disappear forever|vanish forever)\b/.test(text) &&
+        /\b(?:disappear forever|vanish forever|never wake up)\b/.test(text);
       const thirdPersonImminent = /\b(?:about to|going to|plans? to|intend(?:s)? to|will)\s+(?:kill|hurt|shoot|stab)\s+(?:herself|himself|themself|themselves|me|us)\b/.test(clause) ||
         /\b(?:my partner|my spouse|my husband|my wife|my ex|he|she|they)\b.{0,65}\b(?:threatened|plans?|going)\b.{0,45}\b(?:kill|shoot|stab)\s+(?:me|us)\b.{0,30}\b(?:tonight|today|now|soon|right now)\b/.test(clause);
       const explicitCurrentIntent = /\b(?:going to|about to|plan to|intend to|i will)\s+(?:kill myself|end my life|hurt myself|kill someone|hurt someone|cut my wrists?|slash my wrists?)\b/.test(clause) ||
@@ -178,14 +192,14 @@
       const spanishCurrentIntent = /\b(?:voy a quitarme la vida|me voy a suicidar|voy a matarme)\b/.test(clause) &&
         /\b(?:esta noche|ahora|hoy|ya|pronto)\b/.test(clause);
       const immediate = (acuteIngestion && !routineMedication) || (quantifiedMedication && !routineMedication) ||
-        acuteOverdose || acuteBleeding || acuteBreathing || acuteInjury || weaponAtSelf || imminentJump ||
-        thirdPersonImminent || spanishCurrentIntent || (explicitCurrentIntent && !negatedIntent);
+        acuteOverdose || recentFistful || acuteBleeding || bandageSoaking || acuteBreathing || acuteInjury || weaponAtSelf || imminentJump ||
+        atLedge || garageCarbonMonoxide || thirdPersonImminent || spanishCurrentIntent || (explicitCurrentIntent && !negatedIntent);
       // A fictional frame describes source context; it must not automatically
       // mask a subsequent direct disclosure. Ambiguous same-clause fiction is
       // clarified rather than treated as established live intent.
       if (immediate && (!fictional || /\b(?:in real life|actually i|but now|right now i)\b/.test(clause))) return 'urgent_review';
       if (immediate && fictional) concern = true;
-      if (!fictional && frighteningHarmVoice) concern = true;
+      if (!fictional && (frighteningHarmVoice || frighteningCommand || possibleOtherHarm || ominousObedience || selfErasure)) concern = true;
       if (!fictional && !negatedIntent && !negatedConcern && /\b(?:suicidal|suicide|self harm|self-harm|wish i were dead|want to die|hurt myself|hurt someone|kill myself)\b/.test(clause)) {
         concern = true;
       }
@@ -197,8 +211,9 @@
     const text = clean(message, 8000);
     const direct = /\b(?:my (?:partner|husband|wife|boyfriend|girlfriend|spouse|ex))\b.{0,80}\b(?:hit|punched|assaulted|struck|choked|strangled|slapped|kicked|pushed|threatened|attacked)\s+(?:me|my)\b/.test(text);
     const confinement = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:locked me in|locks me in|keeps me locked|trapped me|traps me|won't let me leave|will not let me leave|prevents me leaving)\b/.test(text);
+    const blockedExit = /\bmy\s+(?:partner|husband|wife|boyfriend|girlfriend|spouse|ex)\b.{0,95}\b(?:blocked (?:the|my|our) (?:doorway|exit|door)|blocked me from leaving|took my phone|has taken my phone)\b/.test(text);
     const fear = /\b(?:afraid|scared|terrified|unsafe|fear|can't go home|cannot go home|don't feel safe|do not feel safe)\b/.test(text);
-    return (direct || confinement) && fear;
+    return (direct || confinement || blockedExit) && fear;
   }
 
   function matchedTopic(text) {

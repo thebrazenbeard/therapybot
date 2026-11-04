@@ -80,14 +80,31 @@
 
   function safeBase(options, message) {
     const supplied = options.baseResult;
-    if (supplied && typeof supplied === 'object' && !Array.isArray(supplied)) return supplied;
+    // Never use a caller-supplied "normal" flag to override the resident
+    // engine's independent check; future callers may not be the current UI.
     if (root.TherapyBotEmbedded && typeof root.TherapyBotEmbedded.respond === 'function') {
-      return root.TherapyBotEmbedded.respond({
+      const actual = root.TherapyBotEmbedded.respond({
         message,
         history: Array.isArray(options.history) ? options.history.slice(-20) : []
       });
+      if (supplied !== undefined) {
+        if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied) ||
+            typeof supplied.reply !== 'string' ||
+            !supplied.safety || !['normal', 'concern', 'urgent_review'].includes(supplied.safety.route)) return null;
+        if (supplied.safety.route !== 'normal') return supplied;
+      }
+      if (!actual || !actual.safety || actual.safety.route !== 'normal') return actual;
+      return supplied || actual;
     }
     return null;
+  }
+
+  function unsafeRoster(members) {
+    return members.some(function (member) {
+      const value = [member.role, member.notes, member.focus, member.question].join(' ').toLowerCase();
+      return /\b(?:should|must|need to|ought to|have to|will)\s+(?:hurt|kill|attack|shoot|stab|assault|abuse|punish)\b/.test(value) ||
+        /\b(?:go|tell|urge)\s+(?:kill|hurt|attack|shoot|stab)\b/.test(value);
+    });
   }
 
   function councilResult(base, mode, reply, speakers, facilitator, memberCount, introduction) {
@@ -210,6 +227,17 @@
     const command = modeFrom(options, message);
     if (!command) return verified;
     const members = membersFrom(options.members);
+    if (unsafeRoster(members)) {
+      return {
+        reply: 'At least one configured Council perspective contains a directive about harming or punishing someone. I will not perform that instruction as a voice. You can revise the member notes or return to direct conversation.',
+        engine: 'embedded-semantic',
+        supportedTopic: false,
+        uncertainty: 'This is an unvalidated precaution on user-authored profile text, not an assessment of a person or their intentions.',
+        sources: [],
+        state: { topic: null, followup: false, councilMode: null },
+        safety: { route: 'concern', coverage: 'unvalidated' }
+      };
+    }
     switch (command.mode) {
       case 'containment':
         return councilResult(verified, 'containment',
