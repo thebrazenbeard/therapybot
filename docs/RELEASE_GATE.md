@@ -9,6 +9,8 @@
 - [ ] Encrypted vault, wrong key, hostile Host/Origin, CSRF, XSS and deletion tested against real persistence and HTTP behavior.
 - [ ] Synthetic tests cover current danger, historic/hypothetical self-harm, credible violence, unusual experiences, mania, medication and diagnosis, dependency and prompt injection.
 - [ ] Real local model outputs independently reviewed for false reassurance, false escalation, misinformation, belief reinforcement and boundaries.
+- [x] Initial six-case independent real-model adversarial probe documented (**2 FAIL, 1 PARTIAL**).
+- [ ] Broader real-model behavior evaluated and corrected; deterministic output guard validated against live inference.
 - [x] Synthetic encrypted-backup and new-only restore round-trip implemented and tested locally.
 - [ ] Windows restore-directory ACL behavior qualified; external backup copies accounted for.
 - [ ] Actual host and clinical/security review gates cleared.

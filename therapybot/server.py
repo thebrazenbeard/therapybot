@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 from .backup import BackupError, create_backup
 from .knowledge import search_sources
 from .model import ModelUnavailable, complete, local_model_url
-from .safety import urgent_reply
+from .safety import guard_generated_reply, urgent_reply
 from .vault import LockedError, Vault, WrongPassphrase
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
@@ -211,7 +211,8 @@ class TherapyHandler(BaseHTTPRequestHandler):
                         lambda match: match.group(0) if match.group(1) in known_ids else "[unverified citation omitted]",
                         reply,
                     )
-                    mode = "local-model"
+                    reply, withheld = guard_generated_reply(text, reply)
+                    mode = "guarded" if withheld else "local-model"
                 persisted = save_history and self.server.vault.unlocked
                 if persisted:
                     self.server.vault.add_many([

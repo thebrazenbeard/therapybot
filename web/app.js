@@ -232,6 +232,7 @@ function addMessage(role, text, sources = [], mode = "") {
     bubble.appendChild(sourcesBox);
   }
   if (mode === "local-model") bubble.appendChild(node("div", "tiny-muted", "Local model · Claims not clinically verified"));
+  if (mode === "guarded") bubble.appendChild(node("div", "tiny-muted", "Safety boundary · An unsupported model label was withheld"));
   if (mode === "safety") bubble.appendChild(node("div", "tiny-muted", "Safety fallback · Not emergency monitoring"));
   list.appendChild(bubble);
   list.scrollTop = list.scrollHeight;

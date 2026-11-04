@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from therapybot.server import create_server
+from therapybot.safety import guard_generated_reply
 from therapybot.vault import LockedError, Vault, WrongPassphrase
 
 
@@ -37,6 +38,36 @@ class VaultTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT 1").fetchone()[0], 1)
             with self.assertRaises(sqlite3.ProgrammingError):
                 db.execute("SELECT 1")
+
+    def test_generated_reply_guard_targets_personal_diagnostic_assertions(self):
+        text = "I think strangers are monitoring my phone and sending secret signals."
+        unsafe = "You're experiencing paranoia, which is a cognitive distortion."
+        guarded, replaced = guard_generated_reply(text, unsafe)
+        self.assertTrue(replaced)
+        self.assertNotIn("paranoia", guarded.lower())
+        self.assertIn("can't establish a cause", guarded)
+        self.assertEqual(guard_generated_reply("Explain the clinical term paranoia.", unsafe), (unsafe, False))
+        diagnosed = "I was diagnosed with bipolar disorder by my psychiatrist. Explain it."
+        self.assertEqual(guard_generated_reply(diagnosed, "You have bipolar disorder."),
+                         ("You have bipolar disorder.", False))
+        cautious = "Some people might interpret this as a stress response; more context is needed."
+        self.assertEqual(guard_generated_reply(text, cautious), (cautious, False))
+        with_prior_diagnosis = "I was diagnosed with bipolar disorder. Strangers are sending me secret signals now."
+        self.assertTrue(guard_generated_reply(with_prior_diagnosis, unsafe)[1],
+                        "A different prior diagnosis must not disable the guard")
+        for label in ("Your beliefs are delusional.",
+                      "What you describe is paranoid ideation and a cognitive distortion.",
+                      "It appears that you may be experiencing paranoia."):
+            with self.subTest(label=label):
+                self.assertTrue(guard_generated_reply(text, label)[1])
+        for academic in ("I am writing an essay about the phrase 'you're experiencing paranoia'.",
+                         "In my screenplay I want the therapist to say 'You are experiencing paranoia'."):
+            with self.subTest(academic=academic):
+                self.assertEqual(guard_generated_reply(academic, unsafe), (unsafe, False))
+        mixed = "Please define paranoia. I think strangers are monitoring my phone right now."
+        self.assertTrue(guard_generated_reply(mixed, unsafe)[1])
+        mixed_essay = "I am writing an essay about paranoia. But I think strangers are actually tracking me."
+        self.assertTrue(guard_generated_reply(mixed_essay, unsafe)[1])
 
     def test_records_encrypted_searchable_and_lockable(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -227,6 +258,18 @@ class LocalHttpTests(unittest.TestCase):
             mock.shutdown()
             mock.server_close()
             thread.join(timeout=3)
+
+    def test_http_model_guard_replaces_unsupported_direct_diagnosis(self):
+        self.unlock()
+        self.server.model_url = "http://127.0.0.1:1"
+        with patch("therapybot.server.complete", return_value="You're experiencing paranoia and a cognitive distortion."):
+            status, payload, _ = self.request("POST", "/api/chat", {
+                "text": "I think strangers are sending me secret signals through my phone."
+            }, token=self.token)
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["mode"], "guarded")
+        self.assertNotIn("paranoia", payload["reply"].lower())
+        self.assertFalse(payload["saved"])
 
     def test_nonlocal_model_url_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

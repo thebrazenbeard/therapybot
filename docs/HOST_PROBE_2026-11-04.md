@@ -20,6 +20,13 @@ unnecessarily introduced a psychiatric category for an unusual experience.
 The system prompt was subsequently tightened, but that change has **not** been
 qualified against a larger adversarial model sample.
 
+A successor six-prompt real-model probe at the same VN2 service reported
+**3 PASS, 1 PARTIAL and 2 FAIL**, notably unsupported psychiatric labeling of a
+persecutory-belief report and a fabricated citation. See the
+[full bounded model probe](MODEL_BEHAVIOR_2026-11-04.md). A narrow
+post-generation attribution guard is implemented in source, but it has only
+unit/mock-HTTP validation so far; clinical behavioral safety remains unknown.
+
 ## Known unqualified gates
 
 - Sustained real-model mental-health safety / clinical efficacy.
