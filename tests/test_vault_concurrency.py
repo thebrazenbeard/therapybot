@@ -199,6 +199,52 @@ class VaultConcurrencyTests(unittest.TestCase):
         self.assertIsNone(self.server.session)
         self.assertFalse(spurious_error_response.is_set(), "Do not attempt a second HTTP response after partial delivery")
 
+    def test_three_stalled_private_responses_do_not_serialize_the_auth_lock(self):
+        # A single slow client is insufficient: three clients could each hold
+        # the mutex until their independent socket timeout (3 * 2 seconds).
+        # Exercise the real threaded server and pause all sends at the I/O
+        # boundary, after the private snapshots have been authorized.
+        for number in range(650):
+            self.server.vault.add("journal", "SYNTHETIC_JOURNAL_%03d_" % number + "X" * 11000)
+        seen = set()
+        seen_lock = threading.Lock()
+        all_sending = threading.Event()
+        release_sends = threading.Event()
+        original_bytes = Handler._bytes
+
+        def hold_private_socket_send(handler, data, *args, **kwargs):
+            if handler.path == "/api/journal":
+                with seen_lock:
+                    seen.add(id(handler))
+                    if len(seen) == 3:
+                        all_sending.set()
+                self.assertTrue(release_sends.wait(4), "synthetic stalled response was not released")
+            return original_bytes(handler, data, *args, **kwargs)
+
+        sockets = []
+        try:
+            with patch.object(Handler, "_bytes", hold_private_socket_send):
+                for _ in range(3):
+                    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    client.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+                    sockets.append(client)
+                    client.connect(("127.0.0.1", self.server.server_port))
+                    client.sendall((
+                        "GET /api/journal HTTP/1.1\r\n"
+                        f"Host: 127.0.0.1:{self.server.server_port}\r\n"
+                        f"X-TherapyBot-Session: {self.session_a}\r\n"
+                        "Connection: close\r\n\r\n"
+                    ).encode("ascii"))
+                self.assertTrue(all_sending.wait(3), "private sends appear serialized under auth_lock")
+                code, _ = self.request("POST", "/api/lock", {}, self.session_a)
+                self.assertEqual(200, code)
+                self.assertFalse(self.server.vault.unlocked)
+                self.assertIsNone(self.server.session)
+        finally:
+            release_sends.set()
+            for client in sockets:
+                client.close()
+
     def test_interrupted_unlock_reply_clears_unreceived_session(self):
         original_json = Handler._json
 

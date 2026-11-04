@@ -201,8 +201,11 @@
         const reply = result.reply.slice(0, MAX_REPLY);
         const sources = sourcePointers(result);
         const presentation = presentationFrom(result);
-        const finalRoute = result !== raw && result.safety && ['normal', 'concern', 'urgent_review', 'immediate'].includes(result.safety.route)
-          ? result.safety.route : route;
+        // Council abstention can strengthen a normal base result to unknown.
+        // A malformed Council result must never silently inherit "normal".
+        const finalRoute = result === raw ? route :
+          result.safety && ['normal', 'concern', 'urgent_review', 'immediate', 'unknown'].includes(result.safety.route)
+            ? result.safety.route : 'unknown';
         const response = Object.freeze({
           status: 'ok', reply, providerId, kind: provider.kind,
           modeApplied: presentation.councilMode || 'direct',
