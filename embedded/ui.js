@@ -3,7 +3,6 @@
   'use strict';
 
   const byId = (id) => document.getElementById(id);
-  const form = byId('conversation-form');
   const messageField = byId('message');
   const log = byId('conversation-log');
   const sendButton = byId('send-message');
@@ -14,7 +13,6 @@
   const conveneButton = byId('convene-council');
   const manageButton = byId('manage-council');
   const memberSetup = byId('council-setup');
-  const memberForm = byId('member-form');
   const memberList = byId('member-list');
   const memberName = byId('member-name');
   const memberRole = byId('member-role');
@@ -85,7 +83,9 @@
 
   function resetMemberEditor() {
     editingMemberId = null;
-    memberForm.reset();
+    memberName.value = '';
+    memberRole.value = '';
+    memberNotes.value = '';
     saveMemberButton.textContent = 'Add member';
     cancelEditButton.hidden = true;
   }
@@ -128,8 +128,9 @@
     }
   }
 
-  memberForm.addEventListener('submit', (event) => {
-    event.preventDefault();
+  // Council details have no native form submission. If JavaScript fails to
+  // initialize, the button is inert and member text cannot enter a URL/body.
+  saveMemberButton.addEventListener('click', () => {
     const name = memberName.value.trim();
     const role = memberRole.value.trim();
     const notes = memberNotes.value.trim();
@@ -207,6 +208,10 @@
         if (!speaker || typeof speaker !== 'object') continue;
         const card = make('div', 'council-speaker');
         card.append(make('strong', 'council-speaker-name', speaker.name || 'Unnamed perspective'));
+        // Display user-defined names as user-owned metadata, never as the
+        // generated speaker's identity or words. textContent prevents markup.
+        const profile = members.find((member) => member.id === speaker.id);
+        if (profile) card.append(make('span', 'council-speaker-user-label', 'Your label: ' + profile.name));
         if (speaker.role) card.append(make('span', 'council-speaker-role', speaker.role));
         card.append(make('div', 'council-speaker-text', speaker.text || speaker.content || ''));
         group.append(card);
@@ -234,12 +239,13 @@
 
       if (Array.isArray(result.sources) && result.sources.length) {
         const citations = make('div', 'message-sources');
-        citations.setAttribute('aria-label', 'Suggested source links');
+        citations.setAttribute('aria-label', 'Related reading, not verification of this response');
+        citations.append(make('span', 'source-qualifier', 'Related reading · not verification of this reply'));
         for (const source of result.sources.slice(0, 5)) {
           const anchor = sourceAnchor(source);
           if (anchor) citations.append(anchor);
         }
-        if (citations.childElementCount) article.append(citations);
+        if (citations.querySelector('a')) article.append(citations);
       }
     }
     log.append(article);
@@ -346,16 +352,15 @@
     }
   }
 
-  form.addEventListener('submit', sendMessage);
-  // Button is intentionally not a native submit control. If the local script
-  // fails to initialize, a browser must not put sensitive text into a file URL.
+  // This composer is an inert group, not a native form. If scripts fail,
+  // neither browser submit keys nor Send can serialize sensitive text.
   sendButton.addEventListener('click', sendMessage);
   clearButton.addEventListener('click', clearChat);
   forgetAllButton.addEventListener('click', forgetAll);
   messageField.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      form.requestSubmit();
+      sendMessage(event);
     }
   });
   document.querySelectorAll('[data-suggestion]').forEach((button) => {

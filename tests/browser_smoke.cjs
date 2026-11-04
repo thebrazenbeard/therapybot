@@ -235,6 +235,30 @@ async function run() {
       assert.match(await page.$eval('#council-count', (element) => element.textContent), /2 members/);
     });
 
+    await test('Without JavaScript, Add member cannot submit private text or navigate', async () => {
+      const disabled = await browser.newPage();
+      try {
+        await disabled.setJavaScriptEnabled(false);
+        await disabled.goto(origin + '/', { waitUntil: 'load', timeout: 20000 });
+        // Only unhide the native controls for a failure-mode probe; no page JS.
+        await disabled.addStyleTag({ content: '#council-setup[hidden] { display: block !important; }' });
+        await disabled.type('#member-name', 'SyntheticSecretName');
+        await disabled.type('#member-role', 'SyntheticSecretRole');
+        await disabled.type('#member-notes', 'SyntheticSecretNotes');
+        const navigations = [];
+        disabled.on('request', (request) => {
+          if (request.isNavigationRequest()) navigations.push(request.url());
+        });
+        const navigation = disabled.waitForNavigation({ timeout: 1200 }).then(() => true, () => false);
+        await disabled.click('#save-member');
+        assert.equal(await navigation, false, 'A disabled-script editor must not submit a native request');
+        assert.equal(disabled.url(), origin + '/');
+        assert.deepEqual(navigations, []);
+      } finally {
+        await disabled.close();
+      }
+    });
+
     await test('Convene and conduct a live two-turn Council exchange', async () => {
       await page.click('#convene-council');
       assert.equal(await page.$eval('#convene-council', (element) => element.getAttribute('aria-pressed')), 'true');

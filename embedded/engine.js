@@ -21,7 +21,7 @@
         'Which consequence are you trying to avoid, and what part of this decision is under your control?',
         'Would it help to separate what has been documented from what is still being assumed?'
       ],
-      sources: ['who-mental-health']
+      sources: ['who-world-mental-health-2022']
     },
     {
       key: 'boundaries',
@@ -36,7 +36,7 @@
         'What consequence would make that boundary difficult to hold?',
         'What would an enforceable boundary look like within your actual constraints?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'relationships',
@@ -51,7 +51,7 @@
         'Are you trying to understand their behavior, decide what to say, or work out your own limits?',
         'What would respectful communication look like here without requiring you to ignore your own needs?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'anger',
@@ -81,7 +81,7 @@
         'What kind of contact feels useful rather than draining?',
         'What would you want more of, without giving up the space you need?'
       ],
-      sources: ['cdc-connection']
+      sources: ['cdc-social-connectedness']
     },
     {
       key: 'trauma',
@@ -96,7 +96,7 @@
         'What feels most important about this experience in your own words?',
         'What would help you keep control over how much of this you examine today?'
       ],
-      sources: ['nimh-psychotherapies', 'who-mental-health']
+      sources: ['nimh-psychotherapies', 'who-world-mental-health-2022']
     },
     {
       key: 'mood',
@@ -111,7 +111,7 @@
         'Is there an immediate pressure you want to unpack first?',
         'What would make the next part of today even slightly more manageable?'
       ],
-      sources: ['nimh-psychotherapies', 'who-mental-health']
+      sources: ['nimh-psychotherapies', 'who-world-mental-health-2022']
     },
     {
       key: 'identity',

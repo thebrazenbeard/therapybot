@@ -16,6 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EMBEDDED = ROOT / "embedded"
+# Allow cold Windows runner startup without removing the subprocess bound.
+NODE_SUBPROCESS_TIMEOUT_SECONDS = 30
 
 
 NODE_PROBE = r"""
@@ -75,7 +77,7 @@ class EmbeddedModelContract(unittest.TestCase):
             text=True,
             capture_output=True,
             cwd=ROOT,
-            timeout=8,
+            timeout=NODE_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -244,12 +246,15 @@ class EmbeddedModelContract(unittest.TestCase):
             self.assertTrue((EMBEDDED / script).is_file())
         ids = {attrs.get("id") for _tag, attrs in scanner.tags}
         self.assertTrue({"conversation-form", "message", "conversation-log", "clear-chat"} <= ids)
-        self.assertTrue(any(tag == "form" and attrs.get("id") == "conversation-form" for tag, attrs in scanner.tags))
+        self.assertTrue(any(tag == "div" and attrs.get("id") == "conversation-form" and attrs.get("role") == "group"
+                            for tag, attrs in scanner.tags))
         self.assertTrue(any(tag == "textarea" and attrs.get("id") == "message" for tag, attrs in scanner.tags))
         self.assertTrue(any(attrs.get("id") == "conversation-log" and attrs.get("role") == "log" for _tag, attrs in scanner.tags))
         ui = (EMBEDDED / "ui.js").read_text(encoding="utf-8")
         self.assertIn("textContent", ui, "untrusted dialogue must be inserted as text")
         self.assertNotIn("innerHTML", ui, "a DOM HTML sink must not receive unsanitized dialogue")
+        self.assertIn("Related reading · not verification of this reply", ui,
+                      "per-response citations must not imply individual advice was externally verified")
         self.assertIsNone(re.search(r"\b(?:fetch|sendBeacon)\s*\(", ui), "embedded UI must not call network APIs")
         self.assertIsNone(re.search(r"\b(?:localStorage|sessionStorage|indexedDB)\s*\.", ui), "embedded UI must not persist personal text")
 
