@@ -10,3 +10,8 @@ __pycache__/
 *.gguf
 *.safetensors
 *.bin
+# Owner-consented trauma/conversation data and derived private training artifacts.
+# These must never enter the public source tree or GitHub Pages bundle.
+private_data/
+local-private/
+*.therapybot-private.json

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="A development-only, repository-contained TherapyBot semantic conversation experiment. No accounts, servers, telemetry, or saved conversations.">
+  <title>TherapyBot · Embedded conversation lab</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="catalog.js"></script>
+  <script defer src="engine.js"></script>
+  <script defer src="council.js"></script>
+  <script defer src="ui.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to conversation</a>
+  <div class="site-frame">
+    <header class="masthead" aria-label="TherapyBot prototype">
+      <div class="identity">
+        <span class="identity-mark" aria-hidden="true">✳</span>
+        <div><div class="identity-name">therapybot<span>.</span></div><div class="identity-caption">EMBEDDED CONVERSATION LAB</div></div>
+      </div>
+      <div class="masthead-right"><span class="head-pill head-pill--caution">DEVELOPMENT ONLY</span><span class="head-pill">REPOSITORY-CONTAINED</span></div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar" aria-label="How this experiment works">
+        <div class="sidebar-intro">
+          <div class="eyebrow">A SMALLER FOOTPRINT</div>
+          <h2>Thoughtful tools.<br><em>Honest limits.</em></h2>
+          <p>This experiment ships its conversation logic with the page. No account, download of model weights, inference server, or paid API is needed to try it locally.</p>
+        </div>
+
+        <div class="sidebar-block">
+          <div class="sidebar-heading"><span class="sidebar-icon" aria-hidden="true">01</span> Inside this page</div>
+          <ul class="feature-list">
+            <li>Structured topic and context matching</li>
+            <li>Source-linked reflection prompts</li>
+            <li>In-memory conversational context</li>
+            <li>An optional, user-defined Inner Council</li>
+          </ul>
+          <p class="small-note">This is a constrained semantic engine, not a trained language model, and its reasoning is not clinically validated.</p>
+        </div>
+
+        <div class="sidebar-block privacy-block">
+          <div class="sidebar-heading"><span class="sidebar-icon" aria-hidden="true">02</span> Your privacy</div>
+          <p>No telemetry, network requests, local storage, cookies, or saved transcripts. Conversation history exists only in this open tab and disappears when you close or refresh it.</p>
+          <p class="small-note">Source links open external websites only if you choose to click them.</p>
+        </div>
+
+        <div class="sidebar-bottom"><span aria-hidden="true">◎</span> An experiment in accessible, inspectable intelligence—without pretending every conversation needs a giant model.</div>
+      </aside>
+
+      <main id="main" class="main-content">
+        <div class="main-heading">
+          <div>
+            <div class="eyebrow eyebrow--accent"><span class="live-dot" aria-hidden="true"></span> LOCAL EXPERIMENT · NO EXTERNAL INFERENCE</div>
+            <h1>Make some <em>room</em> to think.</h1>
+            <p class="lead">Explore a situation at your own pace. This early engine can follow a few structured topics and ask grounded questions; it cannot replace a person or professional care.</p>
+          </div>
+          <div class="engine-card"><span class="engine-label">ACTIVE ENGINE</span><span id="engine-status" class="engine-status" role="status" aria-live="polite">Checking bundled engine…</span><span class="engine-subtitle">No separate model server</span></div>
+        </div>
+
+        <div class="safety-alert" aria-label="Immediate help information">
+          <span class="safety-icon" aria-hidden="true">!</span>
+          <p><strong>Need urgent help?</strong> This prototype cannot reliably identify emergencies or provide crisis care. If there is immediate danger, contact local emergency services. In the United States, <a href="https://988lifeline.org/get-help/" target="_blank" rel="noopener noreferrer">call or text 988</a>.</p>
+        </div>
+        <noscript><p class="no-script">JavaScript is required for the bundled conversation engine. This page does not submit messages to a remote service.</p></noscript>
+
+        <section class="chat-card" aria-labelledby="conversation-title">
+          <div class="chat-header">
+            <div><span class="eyebrow">CONVERSATION</span><h2 id="conversation-title">A place to examine a thought.</h2></div>
+            <div class="chat-header-actions"><span class="status-chip"><span class="chip-dot" aria-hidden="true"></span> Unsaved · tab memory only</span><button id="clear-chat" type="button" class="text-button">Clear chat</button><button id="clear-all" type="button" class="text-button">Forget all</button></div>
+          </div>
+
+          <div class="council-toolbar" aria-label="Inner Council controls">
+            <div class="council-toolbar-copy">
+              <strong>My Inner Council</strong>
+              <span id="council-count">No members defined</span>
+            </div>
+            <div class="council-actions">
+              <button id="convene-council" type="button" class="council-primary" aria-pressed="false">Convene</button>
+              <button id="manage-council" type="button" class="council-secondary" aria-expanded="false" aria-controls="council-setup">Manage members</button>
+            </div>
+          </div>
+
+          <section id="council-setup" class="council-setup" aria-label="Define my Inner Council" hidden>
+            <div class="council-setup-heading">
+              <h3>Give your perspectives a voice.</h3>
+              <p>Choose the names and roles yourself. These are optional reflection perspectives, not diagnoses or independent clinical authorities. No profiles leave this tab or persist after refresh.</p>
+            </div>
+            <form id="member-form" autocomplete="off">
+              <div class="member-fields">
+                <label>Member name
+                  <input id="member-name" name="member-name" type="text" maxlength="48" placeholder="Example: The Skeptic" required>
+                </label>
+                <label>Role or perspective
+                  <input id="member-role" name="member-role" type="text" maxlength="100" placeholder="What does this perspective notice?" required>
+                </label>
+              </div>
+              <label class="member-notes-label">Optional speaking notes
+                <textarea id="member-notes" name="member-notes" rows="2" maxlength="200" placeholder="Values, boundaries, or how this perspective tends to speak"></textarea>
+              </label>
+              <div class="member-form-actions">
+                <button id="save-member" class="council-primary" type="submit">Add member</button>
+                <button id="cancel-member-edit" class="council-secondary" type="button" hidden>Cancel edit</button>
+              </div>
+              <div id="member-feedback" class="form-feedback" role="status" aria-live="polite"></div>
+            </form>
+            <ul id="member-list" class="member-list" aria-label="Members of my Inner Council"></ul>
+          </section>
+
+          <div id="conversation-log" class="conversation-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation in this tab">
+            <div id="welcome" class="welcome-panel">
+              <div class="welcome-mark" aria-hidden="true">✳</div>
+              <h3>Start anywhere.</h3>
+              <p>Try a practical question about boundaries, stress, relationships, or feeling disconnected. I can explore those themes in a limited, structured way.</p>
+              <div class="suggestion-list" aria-label="Example questions">
+                <button type="button" class="suggestion" data-suggestion="How do I tell a boundary from avoidance?">How do I tell a boundary from avoidance? <span aria-hidden="true">↗</span></button>
+                <button type="button" class="suggestion" data-suggestion="I feel isolated even when people are around.">I feel isolated even when people are around. <span aria-hidden="true">↗</span></button>
+                <button type="button" class="suggestion" data-suggestion="What can I do when stress is building?">What can I do when stress is building? <span aria-hidden="true">↗</span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <form id="conversation-form" method="post" autocomplete="off">
+              <label class="field-label" for="message">Your message</label>
+              <textarea id="message" name="message" rows="3" maxlength="4000" placeholder="What would you like to untangle?" aria-describedby="message-hint" required></textarea>
+              <div class="composer-footer">
+                <div class="controls">
+                  <label for="style">Tone <select id="style" name="style"><option value="direct">Direct</option><option value="warm">Warm</option><option value="analytical">Analytical</option></select></label>
+                  <label for="depth">Depth <select id="depth" name="depth"><option value="brief">Brief</option><option value="balanced" selected>Balanced</option><option value="deep">Deep</option></select></label>
+                </div>
+                <button id="send-message" type="button" class="send-button">Send <span aria-hidden="true">↗</span></button>
+              </div>
+              <p class="message-hint" id="message-hint">Send or press Ctrl/⌘ + Enter. Try <code>Council:</code>, <code>Solo &lt;name&gt;:</code>, <code>Integrate:</code>, or <code>Containment:</code>. All modes are experimental; nothing is saved.</p>
+              <div id="form-feedback" class="form-feedback" role="status" aria-live="polite"></div>
+            </form>
+          </div>
+        </section>
+
+        <footer class="page-footer">
+          <div><strong>Evidence is not certainty.</strong> Source links are starting points, not proof that a response fits you. Unfamiliar topics may receive a limited answer.</div>
+          <div>Not therapy, diagnosis, treatment, or an emergency service. Public interactive release remains on hold.</div>
+        </footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
