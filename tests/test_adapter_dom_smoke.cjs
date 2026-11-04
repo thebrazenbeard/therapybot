@@ -130,7 +130,8 @@ function descendants(root, predicate) {
 
 test('actual UI uses the registered adapter for ordinary message, source links and transient Clear', async () => {
   const { document, effects } = createFakeDom();
-  assert.match(document.getElementById('engine-status').textContent, /ready/);
+  assert.match(document.getElementById('engine-status').textContent, /rules only/i);
+  assert.match(document.getElementById('engine-status').textContent, /no neural model/i);
   document.getElementById('message').value = 'My manager expects me to pay for company fuel.';
   await document.getElementById('send-message').fire('click');
   const log = document.getElementById('conversation-log');
@@ -140,6 +141,87 @@ test('actual UI uses the registered adapter for ordinary message, source links a
   assert.equal(log.children.length, 1);
   assert.equal(log.children[0].id, 'welcome');
   assert.deepEqual(effects, []);
+});
+
+test('rules-only limits are clear for unsupported questions without inventing model readiness', async () => {
+  const { document, effects } = createFakeDom();
+  const html = fs.readFileSync(path.join(EMBEDDED, 'index.html'), 'utf8');
+  assert.match(html, /RULES-ONLY DEMO/);
+  assert.match(html, /No neural inference is active/);
+  document.getElementById('message').value = 'What is 17 times 23?';
+  await document.getElementById('send-message').fire('click');
+  const log = document.getElementById('conversation-log');
+  const messageMeta = descendants(log, (el) => el.className === 'message-meta').map((n) => n.textContent).join(' ');
+  assert.match(messageMeta, /Rules-only response/);
+  assert.match(messageMeta, /Unsupported topic/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /can't answer open-ended questions/i);
+  assert.match(feedback, /Try a suggested topic/i);
+  assert.deepEqual(effects, [], 'unsupported turns stay entirely in volatile local browser state');
+});
+
+test('urgent safety route takes priority over unsupported-topic guidance in the actual UI', async () => {
+  const { document, effects } = createFakeDom();
+  const html = fs.readFileSync(path.join(EMBEDDED, 'index.html'), 'utf8');
+  assert.match(html, /id="form-feedback"[^>]*role="status"[^>]*aria-live="polite"/,
+    'safety-priority feedback must be announced through the existing live status');
+  document.getElementById('message').value = 'I am going to kill myself.';
+  await document.getElementById('send-message').fire('click');
+  const log = document.getElementById('conversation-log');
+  const meta = descendants(log, (el) => el.className === 'message-meta').map((n) => n.textContent).join(' ');
+  assert.match(meta, /Safety route: urgent_review/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /If someone is in immediate danger, contact local emergency services/i);
+  assert.doesNotMatch(feedback, /No matching topic|Try a suggested topic/i,
+    'no generic topic suggestion can undermine a safety-marked reply');
+  assert.deepEqual(effects, []);
+});
+
+test('Council-prefixed acute danger cannot turn into a dismissive topic or Council footer', async () => {
+  const { document, effects } = createFakeDom();
+  document.getElementById('member-name').value = 'Skeptic';
+  document.getElementById('member-role').value = 'Ask what evidence is missing';
+  await document.getElementById('save-member').fire('click');
+  await document.getElementById('convene-council').fire('click');
+  document.getElementById('message').value = 'Council: I am going to kill myself.';
+  await document.getElementById('send-message').fire('click');
+  const log = document.getElementById('conversation-log');
+  const meta = descendants(log, (el) => el.className === 'message-meta').map((n) => n.textContent).join(' ');
+  assert.match(meta, /Safety route: urgent_review/);
+  assert.equal(descendants(log, (el) => el.className === 'council-speaker').length, 0,
+    'Council cannot override the engine danger veto');
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /If someone is in immediate danger, contact local emergency services/i);
+  assert.doesNotMatch(feedback, /No matching topic|Try a suggested topic|Experimental council reflection/i);
+  assert.deepEqual(effects, []);
+});
+
+test('concern route stays ahead of generic topic fallback without claiming a risk assessment', async () => {
+  const { document } = createFakeDom();
+  document.getElementById('message').value = 'I feel suicidal.';
+  await document.getElementById('send-message').fire('click');
+  const log = document.getElementById('conversation-log');
+  const meta = descendants(log, (el) => el.className === 'message-meta').map((n) => n.textContent).join(' ');
+  assert.match(meta, /Safety route: concern/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /not a risk assessment/i);
+  assert.doesNotMatch(feedback, /No matching topic|Try a suggested topic/i);
+});
+
+test('unknown Council safety route cannot be announced as a recognized topic in the live status', async () => {
+  const { document } = createFakeDom();
+  document.getElementById('member-name').value = 'Skeptic';
+  document.getElementById('member-role').value = 'Challenge unsupported conclusions';
+  await document.getElementById('save-member').fire('click');
+  await document.getElementById('convene-council').fire('click');
+  document.getElementById('message').value = 'Council: What is 17 times 23?';
+  await document.getElementById('send-message').fire('click');
+  const log = document.getElementById('conversation-log');
+  const meta = descendants(log, (el) => el.className === 'message-meta').map((n) => n.textContent).join(' ');
+  assert.match(meta, /Safety route: unknown/);
+  const feedback = document.getElementById('form-feedback').textContent;
+  assert.match(feedback, /Safety interpretation unavailable/i);
+  assert.doesNotMatch(feedback, /Structured topic response|Rules-only topic response|Experimental council reflection/i);
 });
 
 test('actual UI creates user-authored Council, convenes, contains and forgets everything', async () => {

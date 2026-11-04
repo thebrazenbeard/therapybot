@@ -72,10 +72,10 @@
 
   function updateAvailability() {
     const available = engineAvailable();
-    status.textContent = available ? 'Embedded semantic · ready' : 'Engine unavailable';
+    status.textContent = available ? 'Rules only · no neural model' : 'Rules engine unavailable';
     status.classList.toggle('error', !available);
     sendButton.disabled = sending || !available;
-    if (!available) setFeedback('The bundled conversation adapter or engine.js was not loaded. Open the complete embedded/ folder to use this experiment.', true);
+    if (!available) setFeedback('The bundled rules module or adapter did not load. Open the complete embedded/ folder to try this rules-only experiment. No neural model is included.', true);
   }
 
   function setFeedback(text, error = false) {
@@ -227,7 +227,7 @@
     const isUser = role === 'user';
     const article = make('article', 'message ' + (isUser ? 'message--user' : 'message--assistant'));
     const speakers = !isUser && Array.isArray(result?.speakers) ? result.speakers : [];
-    const label = make('span', 'message-label', isUser ? 'You' : speakers.length ? 'Inner Council · experimental' : 'TherapyBot · embedded');
+    const label = make('span', 'message-label', isUser ? 'You' : speakers.length ? 'Inner Council · rules only' : 'TherapyBot · rules only');
     article.append(label);
     if (speakers.length) {
       if (typeof result?.introduction === 'string' && result.introduction.trim()) {
@@ -259,8 +259,9 @@
     if (result && !isUser) {
       const topic = typeof result.state?.topic === 'string' ? result.state.topic : null;
       const route = typeof result.safety?.route === 'string' ? result.safety.route : null;
-      const parts = ['Experimental · not clinically validated'];
+      const parts = ['Rules-only response · not clinically validated'];
       if (topic) parts.push('Topic: ' + topic);
+      if (result.supportedTopic !== true && (!route || route === 'unknown' || route === 'normal')) parts.push('Unsupported topic');
       if (route && route !== 'normal') {
         parts.push('Safety route: ' + route + ' (unvalidated)');
         article.classList.add('message--warning');
@@ -350,7 +351,7 @@
     const epoch = generation;
     sending = true;
     sendButton.disabled = true;
-    setFeedback('Thinking with the bundled semantic engine…');
+    setFeedback('Matching this message against the bundled topics…');
     appendMessage('user', message);
     messageField.value = '';
 
@@ -373,14 +374,24 @@
         councilSelected = false;
         updateCouncilControls();
       }
-      setFeedback(councilMode
-        ? 'Experimental ' + councilMode + ' reflection · these are user-authored perspectives, not diagnoses.'
-        : shown.supportedTopic
-          ? 'Structured topic response · review the sources and limits.'
-          : 'Limited topic coverage · do not rely on this as professional guidance.');
+      // Safety labels are unvalidated lexical cues, not an assessment. Still,
+      // a flagged danger must never get a dismissive "try another topic" footer
+      // merely because its text lacks a matching ordinary topic.
+      const safetyRoute = shown.safety && shown.safety.route;
+      setFeedback(safetyRoute === 'urgent_review' || safetyRoute === 'immediate'
+        ? 'An unvalidated safety rule flagged possible danger. If someone is in immediate danger, contact local emergency services. In the U.S., call or text 988 for crisis support.'
+        : safetyRoute === 'concern'
+          ? 'An unvalidated rule flagged a safety concern; this is not a risk assessment. If danger is immediate, contact local emergency services.'
+          : safetyRoute === 'unknown'
+            ? "Safety interpretation unavailable. This rules-only build can't answer this topic reliably; do not treat this reply as assessed. Try a suggested topic; neural chat isn't installed here."
+            : councilMode
+              ? 'Experimental ' + councilMode + ' reflection · these are user-authored perspectives, not diagnoses.'
+              : shown.supportedTopic
+                ? 'Rules-only topic response · source links are background reading, not proof of this reply.'
+                : "No matching topic. This build can't answer open-ended questions. Try a suggested topic; neural chat isn't installed here.");
     } catch (error) {
       if (epoch === generation) {
-        appendMessage('assistant', 'The bundled engine could not complete that reply. No remote service was contacted.');
+        appendMessage('assistant', 'The bundled rules engine could not complete that reply. No remote service was contacted.');
         if (!messageField.value) messageField.value = message;
         setFeedback(error instanceof Error ? error.message : 'Embedded engine failed.', true);
       }

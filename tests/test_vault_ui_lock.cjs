@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const html = fs.readFileSync(process.env.THERAPYBOT_HTML_PATH || path.join(__dirname, '..', 'static', 'index.html'), 'utf8');
+assert.match(html, /Locking blocks new access but cannot stop a private response that was already authorized and is still being sent\./);
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const event = { preventDefault() {} };
 
