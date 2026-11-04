@@ -26,7 +26,16 @@ class FakeElement {
     this.scrollTop = 0;
     this.scrollHeight = 0;
     this.clientHeight = 0;
-    this.classList = { toggle() {}, add() {}, remove() {} };
+    this.classList = {
+      add: (name) => { this.className = [this.className, name].filter(Boolean).join(' '); },
+      remove: (name) => { this.className = this.className.split(/\s+/).filter((item) => item !== name).join(' '); },
+      toggle: (name, force) => {
+        const present = this.className.split(/\s+/).includes(name);
+        const add = typeof force === 'boolean' ? force : !present;
+        if (add && !present) this.classList.add(name);
+        if (!add && present) this.classList.remove(name);
+      }
+    };
   }
   set innerHTML(_value) { throw new Error('DOM HTML sink is prohibited'); }
   addEventListener(name, action) { (this.handlers[name] ||= []).push(action); }
@@ -141,6 +150,12 @@ test('actual UI creates user-authored Council, convenes, contains and forgets ev
   assert.deepEqual(generated, ['Perspective 1', 'Perspective 2']);
   const labels = descendants(log, (el) => el.className === 'council-speaker-user-label').map((el) => el.textContent);
   assert.deepEqual(labels, ['Your label: Skeptic', 'Your label: Guardian']);
+  document.getElementById('message').value = 'Council: qwerty unknown situation xyz';
+  await document.getElementById('send-message').fire('click');
+  const abstention = log.children.at(-1);
+  assert.match(descendants(abstention, (el) => el.className === 'message-content').map((el) => el.textContent).join(' '), /cannot establish a supported topic/i);
+  assert.match(abstention.className, /message--warning/, 'unknown Council route must be visually marked');
+  assert.match(descendants(abstention, (el) => el.className === 'message-meta').map((el) => el.textContent).join(' '), /Safety route: unknown \(unvalidated\)/);
   document.getElementById('message').value = 'Containment: Return to direct conversation.';
   await document.getElementById('send-message').fire('click');
   assert.equal(document.getElementById('convene-council').getAttribute('aria-pressed'), 'false');

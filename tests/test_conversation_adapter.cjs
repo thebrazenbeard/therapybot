@@ -106,6 +106,17 @@ test('Council is a separately selected simulation and detected concern vetoes it
   assert.equal(councilCalls, 1);
 });
 
+test('missing Council safety metadata cannot silently inherit a normal route', async () => {
+  const council = { respond({ baseResult }) {
+    return { ...baseResult, reply: 'Synthetic abstention', safety: null, supportedTopic: false };
+  } };
+  const session = loadAdapter().createSession({ providers: [localProvider()], defaultProviderId: 'semantic', council });
+  const answer = await session.turn({ message: 'Synthetic question', mode: 'council', members: [{ name: 'Lens' }] });
+  assert.equal(answer.status, 'ok');
+  assert.equal(answer.safety.route, 'unknown');
+  assert.equal(answer.presentation.supportedTopic, false);
+});
+
 test('adapter preserves opaque Unicode speaker IDs without converting authored labels into engine speech', async () => {
   const council = { respond({ baseResult }) {
     return {
@@ -268,4 +279,12 @@ test('real PR11 embedded semantic and Inner Council objects satisfy the adapter 
   ]);
   assert.doesNotMatch(council.reply, /Skeptic|Protector/);
   assert.equal(session.snapshot().length, 4);
+  const unsupported = await session.turn({
+    message: 'Council: qwerty unknown situation xyz', mode: 'council',
+    members: [{ name: 'Skeptic', role: 'Check evidence' }]
+  });
+  assert.equal(unsupported.status, 'ok');
+  assert.equal(unsupported.presentation.speakers.length, 0);
+  assert.equal(unsupported.safety.route, 'unknown', 'Council abstention must retain the unvalidated unknown route');
+  assert.equal(unsupported.presentation.supportedTopic, false);
 });
