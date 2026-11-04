@@ -4,3 +4,5 @@ node_modules/
 *.gguf.*
 click-smoke-*-profile/
 click-smoke-*-result.png
+two-prompt-*-profile/
+two-prompt-*-result.png
