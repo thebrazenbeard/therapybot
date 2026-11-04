@@ -1,0 +1,115 @@
+# SOURCE CANDIDATE ONLY. No runs until reviewed and the owner manually labels this exact PR.
+# Public standard Ubuntu runners are free; a private repository MUST skip the job.
+name: TherapyBot browser neural smoke (manual PR label)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: therapybot-neural-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-browser-neural:
+    if: >-
+      github.event.repository.private == false &&
+      github.event.label.name == 'bt2-browser-neural-smoke' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'experiment/bt2-browser-neural-ci-20261104' &&
+      github.event.pull_request.base.ref == 'experiment/bt2-public-static-browser-lab-20261104'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout PR merge ref without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify public standard runner and installed browsers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_OS" = Linux
+          test "$(uname -m)" = x86_64
+          available_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+          test "$available_kb" -ge 8388608
+          command -v node
+          command -v python3
+          command -v microsoft-edge-stable
+          command -v firefox
+          node --version
+          python3 --version
+          microsoft-edge-stable --version
+          firefox --version
+
+      - name: Install exact locked source and browser controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix tools/neural_poc --ignore-scripts --no-audit --no-fund
+          npm ci --prefix ci --ignore-scripts --no-audit --no-fund
+
+      - name: Run static contract and safety checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check ci/therapybot_browser_neural_smoke.cjs
+          node --test ci/test_browser_neural_smoke.cjs
+          python3 pages/lab/test_pinning.py
+          python3 pages/lab/test_preview.py
+
+      - name: Build isolated pinned static lab without model weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 pages/lab/build_preview.py \
+            --out "$RUNNER_TEMP/therapybot-lab-dist" \
+            --wllama-node-modules "$GITHUB_WORKSPACE/tools/neural_poc/node_modules"
+          if find "$RUNNER_TEMP/therapybot-lab-dist" -type f -iname '*.gguf' -print -quit | grep -q .; then
+            echo "Refusing staged model weights in the static build"
+            exit 1
+          fi
+
+      - name: Exercise offline fail-closed and real 105MB Edge then Firefox UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 43877 --bind 127.0.0.1 \
+            --directory "$RUNNER_TEMP/therapybot-lab-dist" \
+            > "$RUNNER_TEMP/therapybot-browser-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:43877/index.html > /dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          for browser in edge firefox; do
+            available_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+            test "$available_kb" -ge 8388608
+            if [ "$browser" = edge ]; then
+              binary="$(command -v microsoft-edge-stable)"
+            else
+              binary="$(command -v firefox)"
+            fi
+            node ci/therapybot_browser_neural_smoke.cjs \
+              --browser "$browser" \
+              --origin http://127.0.0.1:43877 \
+              --browser-bin "$binary" --mode offline
+            node ci/therapybot_browser_neural_smoke.cjs \
+              --browser "$browser" \
+              --origin http://127.0.0.1:43877 \
+              --browser-bin "$binary" --mode online
+          done
+
+# No workflow_dispatch, paid runners, secrets, upload-artifact, cache action, or Pages deployment.
