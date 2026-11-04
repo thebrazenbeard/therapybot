@@ -47,6 +47,27 @@ $env:PYTHONPATH = 'D:\VERA\repos\intranel\src'
 py -3 poll_therapybot.py --live --pages 3
 ```
 
+To correlate the publicly observed **REVIEW → ACK → REPORT** chain and check
+both immutable PR heads against current GitHub metadata, use:
+
+```powershell
+py -3 poll_therapybot.py --live --pages 3 --chain --check-heads
+```
+
+This path *does not write* an ACK. It deliberately distinguishes a Team01
+requester's REPORT from a BT2 respondent's separate REPORT. Missing causal
+parents, mismatched role addresses, conflicting message identities, unknown
+head probes, and stale exact subjects remain explicit `HOLD_*` states.
+
+**2026-11-04 second-wave observation:** BT2's claimed ACK [#6638063155](https://github.com/thebrazenbeard/therapybot/issues/4#issuecomment-6638063155)
+correctly names the request parent and matches its historical exact subject.
+Team01's subsequent [REPORT #6638115440](https://github.com/thebrazenbeard/therapybot/issues/4#issuecomment-6638115440)
+names the ACK as parent but is *authored by Team01*, not the awaited BT2
+reviewer REPORT. PR11 advanced from the request pin `f4f68621...` to
+`877330ad216c405938b32cb6da8888935b8711bd`; PR12 remains pinned at
+`7be7314c...`. Therefore the live chain must currently return
+`HOLD_STALE_SUBJECT`, even though the historical ACK claim is observed.
+
 Only public GitHub metadata is fetched with unauthenticated `GET`. No token,
 GitHub write, local database, conversation transcript, or secret is involved.
 `--fixture` permits synthetic-only offline tests. Results contain **packet
@@ -62,7 +83,8 @@ metadata**, never payload text. No background service starts.
 - `origin_authenticated`, `delivered`, `ack_accepted`, and `effect_executed`
   are **always false**. Intranel validation and GitHub visibility do not prove them.
 - `exact_subject_currentness_checked` is false; re-fetch current PR heads
-  independently before accepting a review or acting on it.
+  independently before accepting a review or acting on it. In `--chain`
+  mode, currentness is `UNKNOWN` unless `--check-heads` retrieves both heads.
 - A receiver can issue an `ACK` only after independently observing and
   accepting a request; this program never generates or posts one.
 

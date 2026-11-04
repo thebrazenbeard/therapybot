@@ -10,14 +10,18 @@ import unittest
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from poll_therapybot import MAX_COMMENT_BYTES, scan
+from poll_therapybot import MAX_COMMENT_BYTES, scan, correlate_review_chain
+
+PR11 = "a" * 40
+PR12 = "b" * 40
+SUBJECT = f"therapybot#11@{PR11}+therapybot#12@{PR12}"
 
 
-def packet(*, message_id: str = "msg-001", effect: str = "READ_ONLY", performative: str = "REVIEW", target: str = "therapybot:bt2") -> dict:
+def packet(*, message_id: str = "msg-001", effect: str = "READ_ONLY", performative: str = "REVIEW", target: str = "therapybot:bt2", origin: str = "therapybot:pr11-review", parent: str | None = None) -> dict:
     return {
         "protocol": "INTRANEL/1",
-        "origin": "therapybot:pr11-review",
-        "actor": "therapybot:pr11-review",
+        "origin": origin,
+        "actor": origin,
         "target": target,
         "reply_to": "github:therapybot-issue-4",
         "message_id": message_id,
@@ -25,7 +29,9 @@ def packet(*, message_id: str = "msg-001", effect: str = "READ_ONLY", performati
         "performative": performative,
         "effect_class": effect,
         "security_profile": "OPEN",
-        "exact_subject": "pr11@111+pr12@222",
+        "parent_message_id": parent,
+        "subject": "therapybot/canonical-engine-selection",
+        "exact_subject": SUBJECT,
         "payload": {"claim_type": "SOURCE"},
     }
 
@@ -38,8 +44,11 @@ def fake_parse(obj: dict) -> SimpleNamespace:
         raise ValueError("invalid synthetic packet")
     return SimpleNamespace(
         target=obj["target"],
+        origin=obj["origin"],
         message_id=obj["message_id"],
         conversation_id=obj["conversation_id"],
+        parent_message_id=obj.get("parent_message_id"),
+        subject=obj.get("subject"),
         exact_subject=obj.get("exact_subject"),
         performative=SimpleNamespace(value=obj["performative"]),
         original=obj,
@@ -57,6 +66,23 @@ def comment(comment_id: int, *packets: dict) -> dict:
 
 def run(pages, start_page=1):
     return scan(pages, start_page=start_page, expected_target="therapybot:bt2", parse=fake_parse, digest=fake_digest)
+
+
+def run_chain(pages, heads=None):
+    all_packets = scan(pages, start_page=1, expected_target=None, parse=fake_parse, digest=fake_digest)
+    return correlate_review_chain(all_packets, current_heads=heads)
+
+
+def ack(*, parent: str | None = "msg-001", origin: str = "therapybot:bt2", target: str = "therapybot:pr11-review", message_id: str = "ack-001") -> dict:
+    return packet(message_id=message_id, performative="ACK", target=target, origin=origin, parent=parent)
+
+
+def review_report(*, parent: str | None = "ack-001") -> dict:
+    return packet(message_id="report-001", performative="REPORT", target="therapybot:pr11-review", origin="therapybot:bt2", parent=parent)
+
+
+def requester_report() -> dict:
+    return packet(message_id="requester-report-001", performative="REPORT", target="therapybot:bt2", origin="therapybot:pr11-review", parent="ack-001")
 
 
 class ObserverTests(unittest.TestCase):
@@ -103,6 +129,65 @@ class ObserverTests(unittest.TestCase):
     def test_missing_comment_identity_is_not_silently_discarded(self):
         with self.assertRaises(ValueError):
             run([[{"body": ""}]])
+
+    def test_causal_ack_then_report_is_claim_only(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack()), comment(12, review_report())]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "REVIEW_ACK_REPORT_OBSERVED_UNAUTHENTICATED")
+        self.assertTrue(report["ack_claim_observed"])
+        self.assertTrue(report["report_claim_observed"])
+        self.assertFalse(report["delivered"])
+        self.assertFalse(report["ack_accepted_as_authority"])
+
+    def test_current_ack_without_report_is_pending(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack())]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "WAIT_REPORT_NOT_OBSERVED")
+        self.assertTrue(report["ack_claim_observed"])
+
+    def test_requester_report_is_not_misidentified_as_bt2_report(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack()), comment(12, requester_report())]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "WAIT_RESPONDER_REPORT_NOT_OBSERVED")
+        self.assertTrue(report["requester_report_claim_observed"])
+        self.assertFalse(report["report_claim_observed"])
+
+    def test_ack_with_missing_parent_is_held(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack(parent=None))]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_ACK_CAUSAL_MISMATCH")
+
+    def test_report_with_wrong_parent_is_held(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack()), comment(12, review_report(parent="unrelated"))]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_REPORT_CAUSAL_MISMATCH")
+
+    def test_spoof_like_origin_and_target_held(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack(origin="therapybot:someone-else"))]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_ACK_ORIGIN_TARGET_MISMATCH")
+
+    def test_stale_heads_hold_even_with_valid_causal_claims(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack()), comment(12, review_report())]], heads={11: "c" * 40, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_STALE_SUBJECT")
+        self.assertEqual(report["subject_currentness"], "STALE")
+        self.assertTrue(report["ack_claim_observed"])
+        self.assertTrue(report["report_claim_observed"])
+        self.assertFalse(report["ack_accepted_as_authority"])
+
+    def test_unknown_heads_hold_without_inventing_currentness(self):
+        report = run_chain([[comment(10, packet()), comment(11, ack())]], heads=None)
+        self.assertEqual(report["chain_state"], "HOLD_CURRENT_HEADS_UNKNOWN")
+        self.assertTrue(report["ack_claim_observed"])
+
+    def test_same_packet_identity_different_target_is_conflict(self):
+        conflicting = packet(target="therapybot:pr11-review")
+        report = run_chain([[comment(10, packet()), comment(11, conflicting), comment(12, ack())]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_IDENTITY_COLLISION")
+
+    def test_same_packet_identity_different_conversation_is_conflict(self):
+        conflicting = packet()
+        conflicting["conversation_id"] = "different-conversation"
+        report = run_chain([[comment(10, packet()), comment(11, conflicting), comment(12, ack())]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_IDENTITY_COLLISION")
+
+    def test_missing_review_parent_cannot_be_bootstrapped_by_ack(self):
+        report = run_chain([[comment(11, ack())]], heads={11: PR11, 12: PR12})
+        self.assertEqual(report["chain_state"], "HOLD_PARENT_REVIEW_NOT_OBSERVED")
 
 
 if __name__ == "__main__":

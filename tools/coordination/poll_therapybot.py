@@ -24,6 +24,7 @@ MAX_PACKETS_PER_COMMENT = 4
 MAX_PAGES = 3
 FENCE = re.compile(r"```json[ \t]*\r?\n(.*?)\r?\n```", re.I | re.S)
 READ_ONLY_PERFORMATIVES = {"QUERY", "REQUEST", "REVIEW", "REPORT", "ACK", "REJECT", "WAIT", "CONFLICT"}
+PINNED_SUBJECT = re.compile(r"^therapybot#11@([0-9a-f]{40})\+therapybot#12@([0-9a-f]{40})$")
 
 
 def unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -54,18 +55,43 @@ def fetch_page(page: int) -> list[dict[str, Any]]:
     return comments
 
 
+def fetch_pr_head(pr_number: int) -> str:
+    """Read a GitHub head. A successful fetch is source currentness, not authority."""
+    if pr_number not in (11, 12):
+        raise ValueError("only the two pinned prototype PRs are supported")
+    url = f"https://api.github.com/repos/{REPO}/pulls/{pr_number}"
+    req = Request(url, headers={
+        "User-Agent": "TherapyBot-Intranel-Public-Observer/0.1",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    })
+    with urlopen(req, timeout=15) as response:
+        data = response.read(MAX_PAGE_BYTES + 1)
+    if len(data) > MAX_PAGE_BYTES:
+        raise ValueError("GitHub PR metadata exceeds byte limit")
+    metadata = json.loads(data.decode("utf-8"), object_pairs_hook=unique_pairs)
+    if type(metadata) is not dict or type(metadata.get("head")) is not dict:
+        raise ValueError("invalid GitHub PR metadata")
+    sha = metadata["head"].get("sha")
+    if type(sha) is not str or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise ValueError("invalid GitHub PR SHA")
+    return sha
+
+
 def scan(
     pages: list[list[dict[str, Any]]],
     *,
     start_page: int,
-    expected_target: str,
+    expected_target: str | None,
     parse: Callable[[dict[str, Any]], Any],
     digest: Callable[[Any], str],
 ) -> dict[str, Any]:
     """Inspect a bounded window; never interpret payload prose as commands."""
     if not 1 <= len(pages) <= MAX_PAGES or type(start_page) is not int or start_page < 1:
         raise ValueError("bounded page window required")
-    observed: dict[tuple[str, str], str] = {}
+    # Intranel message_id identifies a packet instance globally. Reusing it in
+    # another conversation is a collision, not a fresh independent identity.
+    observed: dict[str, str] = {}
     outcomes: list[dict[str, Any]] = []
     counts = {key: 0 for key in (
         "comments_scanned", "valid_packets", "new", "duplicate", "conflict",
@@ -104,14 +130,14 @@ def scan(
                         counts["ignored"] += 1
                         continue
                     message = parse(raw)
-                    if str(message.target) != expected_target:
+                    if expected_target is not None and str(message.target) != expected_target:
                         counts["ignored"] += 1
                         continue
                     sha = digest(message)
                     if not re.fullmatch(r"[0-9a-f]{64}", sha):
                         raise ValueError("invalid digest")
                     counts["valid_packets"] += 1
-                    key = (message.conversation_id, message.message_id)
+                    key = message.message_id
                     old = observed.get(key)
                     status = "NEW" if old is None else ("DUPLICATE" if old == sha else "CONFLICT")
                     observed.setdefault(key, sha)
@@ -121,6 +147,10 @@ def scan(
                         "message_id": message.message_id,
                         "conversation_id": message.conversation_id,
                         "performative": message.performative.value,
+                        "origin": str(message.origin),
+                        "target": str(message.target),
+                        "parent_message_id": message.parent_message_id,
+                        "subject": message.subject,
                         "exact_subject": message.exact_subject,
                         "content_sha256": sha,
                         "observation": status,
@@ -156,6 +186,124 @@ def scan(
     }
 
 
+def correlate_review_chain(
+    report: dict[str, Any],
+    *,
+    current_heads: dict[int, str] | None,
+    request_origin: str = "therapybot:pr11-review",
+    responder: str = "therapybot:bt2",
+) -> dict[str, Any]:
+    """Correlate *observed claims*; never manufacture trusted ACK or delivery.
+
+    The exact local GitHub page scan must contain the causal parent to accept
+    correlation. This is intentionally stricter than trusting an ACK's prose.
+    """
+    packets = report["packets"]
+    result: dict[str, Any] = {
+        "chain_state": "HOLD_UNKNOWN",
+        "subject_currentness": "UNKNOWN",
+        "current_heads_checked": current_heads is not None,
+        "review_observed": False,
+        "ack_claim_observed": False,
+        "report_claim_observed": False,
+        "requester_report_claim_observed": False,
+        "origin_authenticated": False,
+        "delivered": False,
+        "ack_accepted_as_authority": False,
+        "effect_executed": False,
+        "review_message_id": None,
+        "ack_message_id": None,
+        "report_message_id": None,
+        "requester_report_message_id": None,
+        "pinned_heads": None,
+        "observed_current_heads": (
+            {"pr11": current_heads.get(11), "pr12": current_heads.get(12)}
+            if current_heads is not None else None
+        ),
+    }
+    if not report.get("coverage_complete"):
+        result["chain_state"] = "HOLD_INCOMPLETE_PAGE_COVERAGE"
+        return result
+    if report["counts"]["conflict"]:
+        result["chain_state"] = "HOLD_IDENTITY_COLLISION"
+        return result
+    reviews = [p for p in packets if p["performative"] == "REVIEW"
+        and p["origin"] == request_origin and p["target"] == responder
+        and p["observation"] == "NEW"]
+    if len(reviews) != 1:
+        result["chain_state"] = "HOLD_PARENT_REVIEW_NOT_UNIQUE" if reviews else "HOLD_PARENT_REVIEW_NOT_OBSERVED"
+        return result
+    review = reviews[0]
+    result["review_observed"] = True
+    result["review_message_id"] = review["message_id"]
+    if review["parent_message_id"] is not None:
+        result["chain_state"] = "HOLD_REVIEW_PARENT_UNEXPECTED"
+        return result
+    pin = PINNED_SUBJECT.fullmatch(review["exact_subject"] or "")
+    if pin is None:
+        result["chain_state"] = "HOLD_UNRECOGNIZED_EXACT_SUBJECT"
+        return result
+    result["pinned_heads"] = {"pr11": pin.group(1), "pr12": pin.group(2)}
+    if current_heads is None or current_heads.get(11) is None or current_heads.get(12) is None:
+        result["chain_state"] = "HOLD_CURRENT_HEADS_UNKNOWN"
+    elif current_heads[11] != pin.group(1) or current_heads[12] != pin.group(2):
+        result["subject_currentness"] = "STALE"
+        result["chain_state"] = "HOLD_STALE_SUBJECT"
+    else:
+        result["subject_currentness"] = "CURRENT"
+    all_ack_claims = [p for p in packets if p["performative"] == "ACK"
+        and p["conversation_id"] == review["conversation_id"]
+        and p["observation"] == "NEW"]
+    acks = [p for p in all_ack_claims
+        if p["origin"] == responder and p["target"] == request_origin]
+    candidates = [p for p in acks if p["parent_message_id"] == review["message_id"]
+        and p["exact_subject"] == review["exact_subject"]
+        and p["subject"] == review["subject"]]
+    if len(candidates) != 1:
+        if result["subject_currentness"] != "CURRENT":
+            return result
+        result["chain_state"] = (
+            "HOLD_ACK_CAUSAL_MISMATCH" if acks else
+            "HOLD_ACK_ORIGIN_TARGET_MISMATCH" if all_ack_claims else
+            "WAIT_ACK_NOT_OBSERVED"
+        )
+        return result
+    ack = candidates[0]
+    result["ack_claim_observed"] = True
+    result["ack_message_id"] = ack["message_id"]
+    reports = [p for p in packets if p["performative"] == "REPORT"
+        and p["origin"] == responder and p["target"] == request_origin
+        and p["conversation_id"] == review["conversation_id"]
+        and p["observation"] == "NEW"]
+    requester_reports = [p for p in packets if p["performative"] == "REPORT"
+        and p["origin"] == request_origin and p["target"] == responder
+        and p["conversation_id"] == review["conversation_id"]
+        and p["parent_message_id"] == ack["message_id"]
+        and p["exact_subject"] == review["exact_subject"]
+        and p["subject"] == review["subject"]
+        and p["observation"] == "NEW"]
+    if len(requester_reports) == 1:
+        result["requester_report_claim_observed"] = True
+        result["requester_report_message_id"] = requester_reports[0]["message_id"]
+    candidates = [p for p in reports if p["parent_message_id"] == ack["message_id"]
+        and p["exact_subject"] == review["exact_subject"]
+        and p["subject"] == review["subject"]]
+    if len(candidates) != 1:
+        if result["subject_currentness"] != "CURRENT":
+            return result
+        result["chain_state"] = (
+            "HOLD_REPORT_CAUSAL_MISMATCH" if reports else
+            "WAIT_RESPONDER_REPORT_NOT_OBSERVED" if requester_reports else
+            "WAIT_REPORT_NOT_OBSERVED"
+        )
+        return result
+    result["report_claim_observed"] = True
+    result["report_message_id"] = candidates[0]["message_id"]
+    if result["subject_currentness"] == "CURRENT":
+        result["chain_state"] = "REVIEW_ACK_REPORT_OBSERVED_UNAUTHENTICATED"
+    return result
+
+
 def run() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     mode = ap.add_mutually_exclusive_group(required=True)
@@ -164,6 +312,8 @@ def run() -> int:
     ap.add_argument("--target", default="therapybot:bt2")
     ap.add_argument("--start-page", type=int, default=1)
     ap.add_argument("--pages", type=int, default=1)
+    ap.add_argument("--chain", action="store_true", help="correlate REVIEW->ACK->REPORT claims; requires --check-heads to avoid unresolved currentness")
+    ap.add_argument("--check-heads", action="store_true", help="GET PR11/12 heads for exact-subject currentness")
     args = ap.parse_args()
     if not 1 <= args.pages <= MAX_PAGES or not 1 <= args.start_page <= 100 or args.start_page + args.pages > 101:
         ap.error("page window must fit 1..100 and contain 1..3 pages")
@@ -186,7 +336,16 @@ def run() -> int:
             pages = json.load(handle, object_pairs_hook=unique_pairs)
         if type(pages) is not list or len(pages) > args.pages:
             ap.error("fixture must contain at most --pages pages")
-    result = scan(pages, start_page=args.start_page, expected_target=args.target, parse=parse_message, digest=content_digest)
+    result = scan(pages, start_page=args.start_page, expected_target=None if args.chain else args.target, parse=parse_message, digest=content_digest)
+    if args.chain:
+        heads = None
+        if args.check_heads:
+            try:
+                heads = {11: fetch_pr_head(11), 12: fetch_pr_head(12)}
+            except (OSError, ValueError, json.JSONDecodeError):
+                # A failed currentness probe must never default to CURRENT.
+                heads = None
+        result["causal_chain"] = correlate_review_chain(result, current_heads=heads)
     print(json.dumps(result, sort_keys=True))
     return 0
 
