@@ -40,3 +40,13 @@ test('reports present defects as failures without upgrading to qualification',as
   assert.equal(report.qualification,'NEVER_CLINICAL_VALIDATION');
   assert.equal(report.releaseVerdict,'HOLD_PENDING_INDEPENDENT_QUALIFICATION');
 });
+
+test('actual embedded engine safety routes are independently observed, without stub',()=>{
+  const {evaluate}=require('./engine_route_probe.cjs');
+  const report=evaluate();
+  assert.equal(report.total,9);
+  assert.equal(report.failed,report.outcomes.filter(item=>!item.passes).length);
+  assert.equal(report.thirdPartySourceMisses,report.outcomes.filter(
+    item=>item.domain==='third_party_acute'&&!item.passes).length);
+  assert.equal(report.validation,'NO_BROWSER_OR_CLINICAL_VALIDATION');
+});
