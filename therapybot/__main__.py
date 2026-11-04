@@ -1,14 +1,32 @@
 """Launch a private browser interface. No cloud calls, no subscription."""
 
 import argparse
+import getpass
 import os
+import sys
 import webbrowser
 from pathlib import Path
 
+from .backup import MAX_BACKUP, BackupError, restore_backup
 from .server import create_server
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "restore-backup":
+        restore_parser = argparse.ArgumentParser(description="Restore encrypted backup to a NEW vault file")
+        restore_parser.add_argument("--input", required=True, type=Path, help="An encrypted .tbbak file")
+        restore_parser.add_argument("--output", required=True, type=Path, help="NEW SQLite file path (must not exist)")
+        restore_args = restore_parser.parse_args(sys.argv[2:])
+        try:
+            if not restore_args.input.is_file() or restore_args.input.stat().st_size > MAX_BACKUP:
+                raise BackupError("Backup file missing or exceeds size limit.")
+            passphrase = getpass.getpass("Original vault passphrase: ")
+            restored_path = restore_backup(restore_args.input.read_bytes(), passphrase, restore_args.output)
+        except (BackupError, OSError) as exc:
+            restore_parser.exit(1, f"Restore rejected: {exc}\n")
+        print(f"Restored into a NEW vault: {restored_path}")
+        print("Launch TherapyBot with --data pointing to that file. Original vault was not modified.")
+        return
     parser = argparse.ArgumentParser(description="TherapyBot experimental local interface")
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--data", type=Path, default=Path.home() / ".therapybot" / "vault.sqlite3")

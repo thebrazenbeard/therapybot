@@ -14,13 +14,13 @@ It is **not psychotherapy, diagnosis, treatment, a clinically validated safety s
 - KoboldCPP/llama.cpp OpenAI-compatible `/v1/chat/completions` adapter; unavailable models are reported honestly.
 - Direct/warm/analytical style; brief/balanced/detailed responses.
 - SQLite conversation and journal records encrypted individually with AES-256-GCM and `scrypt` passphrase-derived key.
-- Journal with optional mood, record search/deletion, plaintext JSON export on user request.
+- Journal with optional mood, record search/deletion, encrypted vault backups and plaintext JSON export on user request.
 - Offline search of original short summaries linking to NIMH, NICE, WHO, CDC and 988.
 - Narrow, explicitly limited present-danger interception; not a suicide or violence risk score.
 
 ## Setup (Windows or Linux)
 
-Python 3.10+ and a modern browser are required. For AI chat, run a separately installed local GGUF model with KoboldCPP or llama.cpp exposing `/v1/chat/completions`.
+Python 3.11+ and a modern browser are required (backup uses SQLite in-memory serialization). For AI chat, run a separately installed local GGUF model with KoboldCPP or llama.cpp exposing `/v1/chat/completions`.
 
 Clone the repository, then use the Python inside its virtual environment—no shell activation or execution-policy change required.
 
@@ -51,11 +51,23 @@ The browser opens automatically with a private access link. If using `--no-brows
 
 Run tests with `python -m unittest discover -s tests -v` after installing dependencies.
 
+## Encrypted backups and recovery
+
+In **Privacy**, click **Download encrypted vault backup (.tbbak)** after unlocking. Unlike **Download plaintext JSON export**, this file is authenticated and encrypted. It contains your SQLite vault snapshot, with record bodies already individually encrypted. An attacker with the backup and a weak passphrase can attempt offline guessing, so use a strong, unique passphrase and keep the backup private. Browser downloads and system backups still require your attention.
+
+To restore, **stop TherapyBot** and use the Python executable from the environment you installed it into:
+
+```bash
+python -m therapybot restore-backup --input /private/path/my-backup.tbbak --output /private/path/restored-vault.sqlite3
+```
+
+On Windows use `./.venv/Scripts/python.exe` (PowerShell: `.\\.venv\\Scripts\\python.exe`) in place of `python`; on Linux use `./.venv/bin/python`. The command prompts for the **original vault passphrase**, verifies integrity and restores into a **new destination file only**; existing vault files are never overwritten. Put the destination in a private directory whose permissions/ACLs you control, not a shared or world-writable folder. Start the app with `--data /private/path/restored-vault.sqlite3`, using that same passphrase. Keep the original backup until you verify restored records yourself. If the passphrase is lost, the backup cannot be decrypted. Backup size is currently capped at 64 MiB.
+
 ## Privacy and safety limits
 
 - Stored chat/journal **contents** are encrypted, but record type, timestamps and IDs are visible in SQLite. This is not full-disk encryption or protection against malware, a compromised OS account or an unlocked browser.
 - The separate model server may have its own logging/network behavior. Check its settings. The TherapyBot adapter only accepts loopback HTTP and rejects redirects and proxies.
-- **Export downloads plaintext JSON.** Browser downloads, OS backups and disk snapshots fall outside the vault. Deleting a live record does not guarantee forensic erasure of SSD blocks or external copies.
+- **Plaintext export downloads readable JSON.** The separate `.tbbak` file is encrypted and passphrase-authenticated, but browser downloads, OS backups and disk snapshots are outside the vault's control. Deleting a live record does not guarantee forensic erasure of SSD blocks or external copies.
 - The app does not contact emergency services for you. Its safety intercept can miss crises or overreact to ambiguous language; its safety and clinical efficacy are unvalidated.
 - Literature and research links are publicly readable but their full-text redistribution/training licenses are not established. Only original short summaries ship.
 

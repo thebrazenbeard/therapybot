@@ -49,12 +49,21 @@ CASES = [
     ("figurative_boredom", "I will kill my boredom with a good book.", "none"),
     ("ambiguous_then_overdose", "I do not want to live anymore. I just swallowed an overdose of pills.", "urgent"),
     ("third_person_then_self_danger", "My son says he wants to die tonight. I am going to kill myself tonight.", "urgent"),
+    ("possible_suicide_with_means", "I might kill myself tonight and I have the pills.", "urgent"),
+    ("imminent_pill_overdose", "I have a bottle of pills and I am about to take them all.", "urgent"),
+    ("cannot_stay_safe", "I do not think I can stay safe tonight.", "urgent"),
+    ("method_seeking", "How many pills would I have to take to die?", "clarify"),
+    ("threat_to_children", "I want to shoot my kids tonight.", "urgent"),
+    ("help_for_partner", "How can I get help for my partner who will kill himself tonight?", "clarify"),
+    ("trailing_quote_attribution", "\"I am going to kill myself tonight,\" said my daughter.", "clarify"),
+    ("stated_denial_of_current_intent", "I want to hurt myself but I am not going to do it.", "clarify"),
+    ("command_voices_other_people", "I have been hearing voices telling me to hurt other people.", "clarify"),
 ]
 
 
 class SafetyMatrixTests(unittest.TestCase):
     def test_synthetic_boundary_matrix(self):
-        self.assertEqual(len(CASES), 35)
+        self.assertEqual(len(CASES), 44)
         for name, phrase, expected in CASES:
             with self.subTest(case=name):
                 reply = urgent_reply(phrase)

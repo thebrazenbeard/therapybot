@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from .backup import BackupError, create_backup
 from .knowledge import search_sources
 from .model import ModelUnavailable, complete, local_model_url
 from .safety import urgent_reply
@@ -110,6 +111,16 @@ class TherapyHandler(BaseHTTPRequestHandler):
         if route.path == "/api/sources":
             q = parse_qs(route.query).get("q", [""])[0][:200]
             return self._json(200, {"sources": search_sources(q, limit=8)})
+        if route.path == "/api/backup":
+            if self.headers.get("X-TherapyBot-Token") != self.server.csrf_token:
+                return self._fail(403, "Missing or invalid app token.")
+            try:
+                encrypted = create_backup(self.server.vault)
+                return self._send(200, encrypted, "application/octet-stream")
+            except LockedError as exc:
+                return self._fail(423, str(exc))
+            except BackupError as exc:
+                return self._fail(400, str(exc))
         if route.path in {"/api/records", "/api/export"}:
             if self.headers.get("X-TherapyBot-Token") != self.server.csrf_token:
                 return self._fail(403, "Missing or invalid app token.")
@@ -203,8 +214,11 @@ class TherapyHandler(BaseHTTPRequestHandler):
                     mode = "local-model"
                 persisted = save_history and self.server.vault.unlocked
                 if persisted:
-                    self.server.vault.add("chat", {"role": "user", "text": text})
-                    self.server.vault.add("chat", {"role": "assistant", "text": reply, "sources": [s["id"] for s in sources], "mode": mode})
+                    self.server.vault.add_many([
+                        ("chat", {"role": "user", "text": text}),
+                        ("chat", {"role": "assistant", "text": reply,
+                                  "sources": [s["id"] for s in sources], "mode": mode}),
+                    ])
                 return self._json(200, {"reply": reply,
                                         "sources": [{"id": s["id"], "title": s["title"], "url": s["url"]} for s in sources],
                                         "mode": mode, "saved": persisted})

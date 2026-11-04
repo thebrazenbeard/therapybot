@@ -98,17 +98,26 @@ class Vault:
         return self._key
 
     def add(self, kind: str, data: dict) -> str:
-        if kind not in {"chat", "journal"} or not isinstance(data, dict):
-            raise ValueError("Invalid record type or data.")
+        return self.add_many([(kind, data)])[0]
+
+    def add_many(self, entries: list[tuple[str, dict]]) -> list[str]:
+        """Commit related encrypted records as one transaction or not at all."""
+        if (not isinstance(entries, list) or not entries or len(entries) > 16
+                or any(kind not in {"chat", "journal"} or not isinstance(data, dict)
+                       for kind, data in entries)):
+            raise ValueError("Invalid record batch.")
         with self._mutex:
             key = self._require_key()
-            record_id = uuid.uuid4().hex
-            nonce = secrets.token_bytes(12)
-            payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
-            cipher = AESGCM(key).encrypt(nonce, payload, (record_id + ":" + kind).encode())
+            ids = []
             with self._connect() as db:
-                db.execute("INSERT INTO records VALUES(?,?,?,?,?)", (record_id, kind, time.time(), nonce, cipher))
-            return record_id
+                for kind, data in entries:
+                    record_id = uuid.uuid4().hex
+                    nonce = secrets.token_bytes(12)
+                    payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
+                    cipher = AESGCM(key).encrypt(nonce, payload, (record_id + ":" + kind).encode())
+                    db.execute("INSERT INTO records VALUES(?,?,?,?,?)", (record_id, kind, time.time(), nonce, cipher))
+                    ids.append(record_id)
+            return ids
 
     def list(self, kind: str | None = None, query: str | None = None) -> list[dict]:
         if kind is not None and kind not in {"chat", "journal"}:

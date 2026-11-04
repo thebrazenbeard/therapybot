@@ -6,8 +6,10 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
 from therapybot.server import create_server
 from therapybot.vault import LockedError, Vault, WrongPassphrase
@@ -18,6 +20,16 @@ SENTINEL = "SYNTHETIC_PRIVATE_JOURNAL_CANARY_91"
 
 
 class VaultTests(unittest.TestCase):
+    def test_atomic_chat_pair_rolls_back_if_second_insert_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Vault(Path(directory) / "atomic.sqlite3")
+            vault.unlock(PASS)
+            with patch("therapybot.vault.uuid.uuid4", return_value=SimpleNamespace(hex="a" * 32)):
+                with self.assertRaises(sqlite3.IntegrityError):
+                    vault.add_many([("chat", {"role": "user", "text": SENTINEL}),
+                                    ("chat", {"role": "assistant", "text": "synthetic response"})])
+            self.assertEqual(vault.list(), [], "The first record must roll back too")
+            vault.lock()
     def test_sqlite_connection_is_closed_on_context_exit(self):
         with tempfile.TemporaryDirectory() as directory:
             vault = Vault(Path(directory) / "connection.sqlite3")
@@ -78,7 +90,10 @@ class LocalHttpTests(unittest.TestCase):
         try:
             data = json.loads(content)
         except ValueError:
-            data = content.decode("utf-8")
+            try:
+                data = content.decode("utf-8")
+            except UnicodeDecodeError:
+                data = content
         return status, data, response_headers
 
     def unlock(self):
@@ -107,6 +122,26 @@ class LocalHttpTests(unittest.TestCase):
             self.assertEqual(self.request("GET", route, token="wrong")[0], 403)
             self.assertEqual(self.request("GET", route, token=self.token)[0], 200)
         self.assertNotIn(SENTINEL.encode(), (Path(self.tempdir.name) / "therapy.sqlite3").read_bytes())
+
+    def test_encrypted_backup_endpoint_requires_token_and_unlocked_vault(self):
+        self.assertEqual(self.request("GET", "/api/backup")[0], 403)
+        self.assertEqual(self.request("GET", "/api/backup", token=self.token)[0], 423)
+        self.unlock()
+        self.assertEqual(self.request("POST", "/api/journal", {"text": SENTINEL}, token=self.token)[0], 200)
+        self.assertEqual(self.request("GET", "/api/backup", token="incorrect")[0], 403)
+        status, backup, headers = self.request("GET", "/api/backup", token=self.token)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "application/octet-stream")
+        self.assertIsInstance(backup, bytes)
+        self.assertNotIn(SENTINEL.encode(), backup)
+        from therapybot.backup import MAGIC, restore_backup
+        self.assertTrue(backup.startswith(MAGIC))
+        destination = Path(self.tempdir.name) / "verified-restoration.sqlite3"
+        restore_backup(backup, PASS, destination)
+        recovered = Vault(destination)
+        recovered.unlock(PASS)
+        self.assertEqual(recovered.list()[0]["data"]["text"], SENTINEL)
+        recovered.lock()
 
     def test_cross_origin_host_and_token_rotation(self):
         self.assertEqual(self.request("POST", "/api/vault", {"passphrase": PASS})[0], 403)

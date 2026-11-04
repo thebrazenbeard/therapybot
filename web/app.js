@@ -369,6 +369,39 @@ async function exportRecords() {
   } catch (error) { if (unlocked && generation === requestGeneration) toast(error.message, true); }
 }
 
+async function downloadEncryptedBackup() {
+  if (!unlocked || !accessToken) return;
+  if (!confirm("Download an encrypted backup of your local vault? You will need your original passphrase to restore it.")) return;
+  const generation = requestGeneration;
+  try {
+    const response = await fetch("/api/backup", {
+      headers: { "X-TherapyBot-Token": accessToken },
+      cache: "no-store",
+      credentials: "omit",
+      mode: "same-origin"
+    });
+    if (!response.ok) {
+      let message = `Backup failed (HTTP ${response.status}).`;
+      try { message = (await response.json()).error || message; } catch (_) { /* Non-JSON error. */ }
+      throw new Error(message);
+    }
+    const bytes = await response.arrayBuffer();
+    if (!unlocked || generation !== requestGeneration) return;
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `therapybot-backup-${new Date().toISOString().slice(0, 10)}.tbbak`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("Encrypted backup downloaded. Store it safely with your passphrase.");
+  } catch (error) {
+    if (unlocked && generation === requestGeneration) toast(error.message, true);
+  }
+}
+
 document.querySelectorAll(".nav-button").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 document.querySelectorAll(".suggestion").forEach((button) => button.addEventListener("click", () => { $("chatInput").value = button.textContent; $("chatInput").focus(); }));
 $("openSourcesButton").addEventListener("click", () => showView("sources"));
@@ -382,6 +415,7 @@ $("historySearch").addEventListener("keydown", (event) => { if (event.key === "E
 $("searchSourcesButton").addEventListener("click", loadSources);
 $("sourceSearch").addEventListener("keydown", (event) => { if (event.key === "Enter") loadSources(); });
 $("exportButton").addEventListener("click", exportRecords);
+$("backupButton").addEventListener("click", downloadEncryptedBackup);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshStatus(); });
 window.addEventListener("focus", () => { refreshStatus(); });
 refreshStatus();
