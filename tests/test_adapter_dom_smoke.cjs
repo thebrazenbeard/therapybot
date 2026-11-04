@@ -28,6 +28,9 @@ class FakeElement {
     this.clientHeight = 0;
     this.classList = { toggle() {}, add() {}, remove() {} };
   }
+  // Synthetic geometry is intentionally zero-height for children; the real
+  // browser regression covers message anchoring across responsive reflow.
+  getBoundingClientRect() { return { top: 0, bottom: this.clientHeight }; }
   set innerHTML(_value) { throw new Error('DOM HTML sink is prohibited'); }
   addEventListener(name, action) { (this.handlers[name] ||= []).push(action); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
