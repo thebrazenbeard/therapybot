@@ -186,3 +186,45 @@ test('responsive resize follows the latest reply only when reader was already at
   window.fire('resize');
   assert.equal(log.scrollTop, 300, 'do not yank a reader who intentionally scrolled up');
 });
+
+test('responsive reflow-generated scroll does not erase prior bottom-follow intent', async () => {
+  const { document, window } = createFakeDom();
+  const log = document.getElementById('conversation-log');
+  log.scrollHeight = 1000;
+  log.clientHeight = 400;
+  log.scrollTop = 600;
+  await log.fire('scroll');
+
+  // Browsers may emit scroll from their own layout adjustment before resize.
+  // The reader has not touched the log; only its geometry changed.
+  log.scrollHeight = 1800;
+  log.clientHeight = 240;
+  await log.fire('scroll');
+  window.fire('resize');
+  assert.equal(log.scrollTop, 1560, 'layout scroll must not strand the newest reply');
+
+  // A genuine reader scroll upward, while dimensions are stable, is different.
+  log.scrollTop = 500;
+  await log.fire('scroll');
+  log.scrollHeight = 2200;
+  await log.fire('scroll');
+  window.fire('resize');
+  assert.equal(log.scrollTop, 500, 'explicit upward reading remains untouched');
+});
+
+test('reader wheel input during reflow overrides prior bottom-follow intent', async () => {
+  const { document, window } = createFakeDom();
+  const log = document.getElementById('conversation-log');
+  log.scrollHeight = 1000;
+  log.clientHeight = 400;
+  log.scrollTop = 600;
+  await log.fire('scroll');
+
+  log.scrollHeight = 1800;
+  log.clientHeight = 240;
+  log.scrollTop = 250;
+  await log.fire('wheel');
+  await log.fire('scroll');
+  window.fire('resize');
+  assert.equal(log.scrollTop, 250, 'user scrolling up during reflow must win');
+});

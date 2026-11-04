@@ -44,14 +44,28 @@
   // Browsers do not reliably preserve bottom alignment on desktop-to-mobile
   // resize, even when the latest reply was fully visible beforehand.
   let followingLatest = true;
+  let lastLogGeometry = null;
+  let readerScrollInput = false;
+  for (const eventName of ['wheel', 'touchmove', 'keydown']) {
+    log.addEventListener(eventName, () => { readerScrollInput = true; });
+  }
   log.addEventListener('scroll', () => {
-    followingLatest = log.scrollHeight - log.clientHeight - log.scrollTop <= 40;
+    const geometry = [log.scrollHeight, log.clientHeight];
+    // A responsive reflow can dispatch a scroll event *before* window.resize.
+    // The reader did not scroll, so preserve their last explicit position
+    // rather than treating the newly enlarged document as a scroll-up.
+    if (readerScrollInput || !lastLogGeometry || geometry.every((value, i) => value === lastLogGeometry[i])) {
+      followingLatest = log.scrollHeight - log.clientHeight - log.scrollTop <= 40;
+    }
+    readerScrollInput = false;
+    lastLogGeometry = geometry;
   });
   window.addEventListener('resize', () => {
     if (!followingLatest) return;
     window.requestAnimationFrame(() => {
       // An explicit instant reposition avoids a smooth-scroll delay after reflow.
       log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+      lastLogGeometry = [log.scrollHeight, log.clientHeight];
     });
   });
 
