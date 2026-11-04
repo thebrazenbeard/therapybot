@@ -6,9 +6,10 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-function loadAdapter() {
+function loadAdapter(residentRespond = () => ({ reply: 'Synthetic resident baseline.', safety: { route: 'normal' } })) {
   const root = { AbortController, setTimeout, clearTimeout };
   root.window = root;
+  root.TherapyBotEmbedded = { respond: residentRespond };
   vm.createContext(root);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../embedded/conversation_adapter.js'), 'utf8'), root);
   return root.TherapyBotConversationAdapter;
@@ -79,6 +80,7 @@ test('explicit experimental output gate can suppress or permit, but never claims
   const result = await allowed.turn({ message: 'Prompt' });
   assert.equal(result.status, 'ok');
   assert.equal(result.kind, 'in-browser-neural');
+  assert.equal(result.responseOrigin, 'selected-provider');
   assert.equal(result.clinicalQualification, 'none');
   assert.equal(result.outputGateQualification, 'unspecified-experimental');
   assert.equal(result.safety.route, 'unknown');
@@ -101,7 +103,9 @@ test('Council is a separately selected simulation and detected concern vetoes it
   assert.equal(councilCalls, 1);
   const concerned = loadAdapter().createSession({ providers: [localProvider(() => ({ reply: 'Static cautious route', safety: { route: 'concern' } }))], defaultProviderId: 'semantic', council });
   const riskResult = await concerned.turn({ message: 'SYNTHETIC_RISK_CANARY', mode: 'council', members: [{ name: 'Skeptic' }] });
-  assert.equal(riskResult.reply, 'Static cautious route');
+  assert.equal(riskResult.safety.route, 'concern');
+  assert.match(riskResult.reply, /provider flagged a possible concern/i);
+  assert.doesNotMatch(riskResult.reply, /Static cautious route/);
   assert.equal(riskResult.modeApplied, 'direct');
   assert.equal(councilCalls, 1);
 });
@@ -241,6 +245,153 @@ test('disposed session refuses all turns', async () => {
   const session = loadAdapter().createSession({ providers: [localProvider()], defaultProviderId: 'semantic' });
   session.dispose();
   assert.equal((await session.turn({ message: 'Hello' })).status, 'unavailable');
+});
+
+test('direct semantic provider cannot forge normal over independently detected urgent danger', async () => {
+  const root = { AbortController, setTimeout, clearTimeout };
+  root.window = root;
+  vm.createContext(root);
+  const dir = path.resolve(__dirname, '../embedded');
+  for (const file of ['catalog.js', 'engine.js', 'conversation_adapter.js']) {
+    vm.runInContext(fs.readFileSync(path.join(dir, file), 'utf8'), root);
+  }
+  const message = 'I am going to kill myself tonight.';
+  const independent = root.TherapyBotEmbedded.respond({ message, history: [] });
+  assert.equal(independent.safety.route, 'urgent_review');
+  let providerCalls = 0;
+  const session = root.TherapyBotConversationAdapter.createSession({
+    providers: [localProvider(() => {
+      providerCalls++;
+      return { reply: 'FORGED_NORMAL_PROVIDER_TEXT', safety: { route: 'normal' }, supportedTopic: true };
+    })], defaultProviderId: 'semantic'
+  });
+  const result = await session.turn({ message });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.safety.route, 'urgent_review');
+  assert.equal(result.reply, independent.reply);
+  assert.equal(result.responseOrigin, 'resident-safety');
+  assert.doesNotMatch(result.reply, /FORGED_NORMAL_PROVIDER_TEXT/);
+  assert.equal(providerCalls, 0);
+});
+
+test('untrusted direct safety labels cannot inject warning prose or weaken resident concern', async () => {
+  const concerned = loadAdapter(() => ({ reply: 'RESIDENT_CONCERN', safety: { route: 'concern' } })).createSession({
+    providers: [localProvider(() => ({ reply: 'FORGED_SAFE_TEXT', safety: { route: 'normal' } }))],
+    defaultProviderId: 'semantic'
+  });
+  const first = await concerned.turn({ message: 'A synthetic concern.' });
+  assert.equal(first.safety.route, 'concern');
+  assert.equal(first.reply, 'RESIDENT_CONCERN');
+  const elevated = loadAdapter().createSession({
+    providers: [localProvider(() => ({ reply: 'ATTACKER_URGENT_TEXT', safety: { route: 'urgent_review' } }))],
+    defaultProviderId: 'semantic'
+  });
+  const second = await elevated.turn({ message: 'An ordinary question.' });
+  assert.equal(second.safety.route, 'urgent_review');
+  assert.equal(second.responseOrigin, 'provider-warning-veto');
+  assert.doesNotMatch(second.reply, /ATTACKER_URGENT_TEXT/);
+  assert.match(second.reply, /unverified|cannot assess|emergency/i);
+});
+
+test('missing resident safety guard fails closed and does not invoke the provider', async () => {
+  const session = loadAdapter(() => null).createSession({
+    providers: [localProvider(() => ({ reply: 'UNSAFE_UNCHECKED', safety: { route: 'normal' } }))],
+    defaultProviderId: 'semantic'
+  });
+  const response = await session.turn({ message: 'Question.' });
+  assert.equal(response.status, 'unavailable');
+  assert.deepEqual(Array.from(session.snapshot()), []);
+});
+
+test('neural output gate cannot override an independent urgent resident response', async () => {
+  let neuralCalls = 0;
+  let gateCalls = 0;
+  const session = loadAdapter(() => ({
+    reply: 'RESIDENT_URGENT_TEXT', safety: { route: 'urgent_review' }
+  })).createSession({
+    providers: [{ id: 'neural', kind: 'in-browser-neural', execution: 'browser-local',
+      respond: () => { neuralCalls++; return { reply: 'FORGED_NEURAL', safety: { route: 'normal' } }; } }],
+    defaultProviderId: 'neural', outputGate: () => { gateCalls++; return { allow: true }; }
+  });
+  const response = await session.turn({ message: 'Synthetic urgent danger.' });
+  assert.equal(response.status, 'ok');
+  assert.equal(response.safety.route, 'urgent_review');
+  assert.equal(response.reply, 'RESIDENT_URGENT_TEXT');
+  assert.equal(neuralCalls, 0);
+  assert.equal(gateCalls, 0);
+});
+
+test('resident acute cue vetoes Council even when the optional provider claims normal', async () => {
+  let providerCalls = 0;
+  let councilCalls = 0;
+  const session = loadAdapter(() => ({ reply: 'RESIDENT_EMERGENCY', safety: { route: 'urgent_review' } })).createSession({
+    providers: [localProvider(() => { providerCalls++; return { reply: 'FORGED_NORMAL', safety: { route: 'normal' } }; })],
+    defaultProviderId: 'semantic',
+    council: { respond: () => { councilCalls++; return { reply: 'FORGED_COUNCIL' }; } }
+  });
+  const answer = await session.turn({ message: 'Council: Synthetic immediate danger.', mode: 'council', members: [{ name: 'Lens' }] });
+  assert.equal(answer.status, 'ok');
+  assert.equal(answer.safety.route, 'urgent_review');
+  assert.equal(answer.reply, 'RESIDENT_EMERGENCY');
+  assert.equal(answer.modeApplied, 'direct');
+  assert.equal(providerCalls, 0);
+  assert.equal(councilCalls, 0);
+});
+
+test('a pending independent resident check is cancelable without provider or history writes', async () => {
+  let providerCalls = 0;
+  const session = loadAdapter(() => new Promise(() => {})).createSession({
+    providers: [localProvider(() => { providerCalls++; return { reply: 'FORGED_NORMAL', safety: { route: 'normal' } }; })],
+    defaultProviderId: 'semantic'
+  });
+  const result = await session.turn({ message: 'A synthetic delay.', timeoutMs: 10 });
+  assert.equal(result.status, 'timed_out');
+  assert.equal(providerCalls, 0);
+  assert.deepEqual(Array.from(session.snapshot()), []);
+});
+
+test('malformed provider safety route is unknown with no injected prose or false clearance', async () => {
+  const session = loadAdapter().createSession({
+    providers: [localProvider(() => ({ reply: 'ATTACKER_MALFORMED_TEXT', safety: { route: 'all_clear' },
+      sources: ['bogus-source'], supportedTopic: true }))],
+    defaultProviderId: 'semantic'
+  });
+  const result = await session.turn({ message: 'Ordinary hypothetical.' });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.safety.route, 'unknown');
+  assert.equal(result.responseOrigin, 'provider-warning-veto');
+  assert.equal(result.presentation.supportedTopic, false);
+  assert.deepEqual(Array.from(result.sourceIds), []);
+  assert.doesNotMatch(result.reply, /ATTACKER_MALFORMED_TEXT/);
+});
+
+test('resident and bounded provider both normal preserve ordinary direct conversation', async () => {
+  const session = loadAdapter().createSession({
+    providers: [localProvider()], defaultProviderId: 'semantic'
+  });
+  const result = await session.turn({ message: 'Ordinary synthetic question.' });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.safety.route, 'normal');
+  assert.equal(result.responseOrigin, 'selected-provider');
+  assert.equal(result.reply, 'Synthetic response.');
+});
+
+test('resident function captured at session creation resists later global replacement', async () => {
+  const root = { AbortController, setTimeout, clearTimeout };
+  root.window = root;
+  root.TherapyBotEmbedded = { respond: () => ({
+    reply: 'CAPTURED_RESIDENT_URGENT', safety: { route: 'urgent_review' }
+  }) };
+  vm.createContext(root);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../embedded/conversation_adapter.js'), 'utf8'), root);
+  const session = root.TherapyBotConversationAdapter.createSession({
+    providers: [localProvider(() => ({ reply: 'FORGED_NORMAL', safety: { route: 'normal' } }))],
+    defaultProviderId: 'semantic'
+  });
+  root.TherapyBotEmbedded.respond = () => ({ reply: 'LATE_FORGED_SAFE', safety: { route: 'normal' } });
+  const result = await session.turn({ message: 'Synthetic urgency.' });
+  assert.equal(result.safety.route, 'urgent_review');
+  assert.equal(result.reply, 'CAPTURED_RESIDENT_URGENT');
 });
 
 test('real PR11 embedded semantic and Inner Council objects satisfy the adapter seam', async () => {
