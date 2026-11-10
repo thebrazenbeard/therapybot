@@ -75,6 +75,9 @@ class HttpTests(unittest.TestCase):
         self.assertEqual([], self.request("/api/search?q=CANARY", headers=valid)[1]["results"])
 
     def test_no_cloud_fallback_and_immediate_gate(self):
+        # Exercise the network fallback path only when an experimental reviewer
+        # was explicitly injected; normal default mode does not call the model.
+        self.server.output_reviewer = lambda **_kwargs: "allow"
         self.assertEqual(503, self.request("/api/chat", "POST", {"message": "Explain behavioral activation"}, self.csrf)[0])
         code, result = self.request("/api/chat", "POST", {"message": "I already swallowed forty tablets to die"}, self.csrf)
         self.assertEqual(200, code)

@@ -40,18 +40,102 @@
   let nextMemberId = 1;
   let editingMemberId = null;
   let councilSelected = false;
-  // Track the reader's intent before a responsive reflow changes scrollHeight.
-  // Browsers do not reliably preserve bottom alignment on desktop-to-mobile
-  // resize, even when the latest reply was fully visible beforehand.
+  // Keep a pre-reflow scroll snapshot. Scroll notifications can arrive after a
+  // responsive layout change, and should not be mistaken for reader intent.
   let followingLatest = true;
+  let stableTop = log.scrollTop;
+  let stableHeight = log.scrollHeight;
+  let stableViewport = log.clientHeight;
+  let readingAnchor = null;
+  let reflowInProgress = false;
+  const bottomGap = () => log.scrollHeight - log.clientHeight - log.scrollTop;
+  const snapshotScroll = () => {
+    stableTop = log.scrollTop;
+    stableHeight = log.scrollHeight;
+    stableViewport = log.clientHeight;
+  };
+  const captureReadingAnchor = (anticipatedTop = log.scrollTop) => {
+    // A wheel input can be immediately followed by resize before the browser
+    // dispatches its scroll event. Project the selected message at that offset.
+    const viewportTop = log.getBoundingClientRect().top + anticipatedTop - log.scrollTop;
+    readingAnchor = null;
+    for (const element of log.children) {
+      const rect = element.getBoundingClientRect();
+      if (rect.bottom > viewportTop + 4) {
+        readingAnchor = { element, offset: rect.top - viewportTop };
+        break;
+      }
+    }
+  };
+  const restoreReadingAnchor = (anchor) => {
+    if (!anchor || !anchor.element.isConnected) return;
+    const displacement = anchor.element.getBoundingClientRect().top -
+      log.getBoundingClientRect().top - anchor.offset;
+    if (Math.abs(displacement) > 1) log.scrollTop += displacement;
+  };
   log.addEventListener('scroll', () => {
-    followingLatest = log.scrollHeight - log.clientHeight - log.scrollTop <= 40;
+    if (reflowInProgress) return;
+    if (log.scrollHeight !== stableHeight || log.clientHeight !== stableViewport) return;
+    followingLatest = bottomGap() <= 40;
+    stableTop = log.scrollTop;
+    if (followingLatest) readingAnchor = null;
+    else captureReadingAnchor();
   });
+  // Input can precede its scroll event. Record upward reader intent synchronously
+  // so a resize in the same frame cannot drag the reader to the newest reply.
+  log.addEventListener('wheel', (event) => {
+    if (event.deltaY < 0) {
+      followingLatest = false;
+      const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? log.clientHeight : 1;
+      const anticipatedTop = Math.max(0, Math.min(log.scrollHeight - log.clientHeight,
+        log.scrollTop + event.deltaY * units));
+      captureReadingAnchor(anticipatedTop);
+    }
+  }, { passive: true });
+  log.addEventListener('keydown', (event) => {
+    if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) followingLatest = false;
+  });
+  let touchStartY = null;
+  log.addEventListener('touchstart', (event) => {
+    touchStartY = event.touches[0]?.clientY ?? null;
+  }, { passive: true });
+  log.addEventListener('touchmove', (event) => {
+    if (touchStartY !== null && event.touches[0]?.clientY > touchStartY + 6) followingLatest = false;
+  }, { passive: true });
   window.addEventListener('resize', () => {
-    if (!followingLatest) return;
+    reflowInProgress = true;
+    const finishReflow = () => window.requestAnimationFrame(() => {
+      snapshotScroll();
+      reflowInProgress = false;
+    });
+    // Direct scrollTo(0) can run just before resize, without a dispatched
+    // scroll event. Compare the actual position against our pre-reflow anchor.
+    const movedUp = bottomGap() > 40 &&
+      (log.scrollTop < 40 || log.scrollTop < stableTop - 40);
+    if (!followingLatest || movedUp) {
+      followingLatest = false;
+      // When a narrower layout has more text, widening can clamp the scroll
+      // offset to its new maximum. Restore the visible message, not the raw offset.
+      if (movedUp) {
+        if (log.scrollTop < 40) readingAnchor = null;
+        else captureReadingAnchor();
+      }
+      const anchor = readingAnchor;
+      snapshotScroll();
+      window.requestAnimationFrame(() => {
+        if (!followingLatest) restoreReadingAnchor(anchor);
+        snapshotScroll();
+        finishReflow();
+      });
+      return;
+    }
     window.requestAnimationFrame(() => {
-      // An explicit instant reposition avoids a smooth-scroll delay after reflow.
-      log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+      if (followingLatest && !(bottomGap() > 40 &&
+        (log.scrollTop < 40 || log.scrollTop < stableTop - 40))) {
+        log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+      }
+      snapshotScroll();
+      finishReflow();
     });
   });
 
@@ -280,7 +364,10 @@
       }
     }
     log.append(article);
-    log.scrollTop = log.scrollHeight;
+    log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+    followingLatest = true;
+    readingAnchor = null;
+    snapshotScroll();
   }
 
   function welcomeBack() {
