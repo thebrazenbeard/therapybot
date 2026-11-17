@@ -81,25 +81,52 @@
     };
   }
 
+  const SAFETY_PRIORITY = Object.freeze({ normal: 0, unknown: 1, concern: 2, urgent_review: 3 });
+
+  function safetyRank(value) {
+    return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SAFETY_PRIORITY, value)
+      ? SAFETY_PRIORITY[value] : -1;
+  }
+
+  function callerSafetyVeto(route) {
+    const urgent = route === 'urgent_review';
+    return {
+      reply: urgent
+        ? 'An unverified caller-provided safety flag requests urgent review. I cannot determine whether anyone is safe. If there is immediate danger, contact local emergency services now.'
+        : 'An unverified caller-provided safety flag requests caution. I cannot determine whether anyone is safe. If danger is immediate, contact local emergency services.',
+      engine: 'embedded-semantic',
+      supportedTopic: false,
+      uncertainty: 'The supplied safety flag is not an independently validated risk assessment.',
+      sources: [],
+      state: { topic: null, followup: false, councilMode: null },
+      safety: { route, coverage: 'unvalidated' }
+    };
+  }
+
   function safeBase(options, message) {
     const supplied = options.baseResult;
-    // Never use a caller-supplied "normal" flag to override the resident
-    // engine's independent check; future callers may not be the current UI.
+    // Re-run the resident engine for every request. Untrusted caller results
+    // may increase caution, but can never weaken or replace a stronger
+    // independent safety reply, nor inject arbitrary text into a safety veto.
     if (root.TherapyBotEmbedded && typeof root.TherapyBotEmbedded.respond === 'function') {
       const actual = root.TherapyBotEmbedded.respond({
         message,
         history: Array.isArray(options.history) ? options.history.slice(-20) : []
       });
-      if (supplied !== undefined) {
-        if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied) ||
-            typeof supplied.reply !== 'string' ||
-            !supplied.safety || !['normal', 'concern', 'urgent_review'].includes(supplied.safety.route)) return { base: null, actual };
-        if (supplied.safety.route !== 'normal') return { base: supplied, actual };
+      const actualRank = safetyRank(actual && actual.safety && actual.safety.route);
+      if (!actual || typeof actual.reply !== 'string' || actualRank < 0) return { base: null, actual };
+      if (supplied === undefined) return { base: actual, actual };
+      const suppliedRank = safetyRank(supplied && supplied.safety && supplied.safety.route);
+      if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied) ||
+          typeof supplied.reply !== 'string' || suppliedRank < 0) {
+        return { base: actualRank > SAFETY_PRIORITY.unknown ? actual : null, actual };
       }
-      if (!actual || !actual.safety || actual.safety.route !== 'normal') return { base: actual, actual };
-      // A caller-supplied normal response may be displayed by the existing UI,
-      // but only the independently rerun base engine can set the topic frame.
-      return { base: supplied || actual, actual };
+      if (actualRank >= suppliedRank) {
+        // For two normal results, preserve the old UI's ordinary display
+        // result. Its Council topic frame still comes only from actual.
+        return { base: actualRank === SAFETY_PRIORITY.normal ? supplied : actual, actual };
+      }
+      return { base: callerSafetyVeto(supplied.safety.route), actual };
     }
     return { base: null, actual: null };
   }
