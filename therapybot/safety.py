@@ -75,7 +75,7 @@ _CONCERN_CONTEXT = (
     r"\b(?:myself|someone|somebody|another person|people|him|her|them)\b|"
     r"\b(?:haven't|have not)\s+slept\b.{0,40}\b(?:\d+|two|three|four|five)\s+days?\b.{0,100}"
     r"\b(?:invincible|unstoppable|can fly|reckless|spending)\b|"
-    r"\b(?:hear|hearing)\b.{0,50}\b(?:voices|people talking|someone talking)\b.{0,100}"
+    r"\b(?:hear|hearing)\b.{0,50}\b(?:voices|people talking|someone talking)\b|"
     r"\b(?:terrified|scared|frightened|afraid)\b|"
     r"\b(?:wish|hope)\b.{0,60}\b(?:sleep|go to sleep)\b.{0,20}"
     r"\b(?:not wake up|never wake up)\b|"
@@ -174,5 +174,6 @@ IMMEDIATE_RESPONSE = ("This sounds potentially urgent. If someone may be in imme
     "seek urgent medical help now. Are you and anyone else involved physically safe at this moment?")
 
 CONCERN_PREFIX = ("I want to take that seriously without jumping to conclusions. "
-    "Are you thinking of acting on it now, or describing thoughts you don't intend to act on? "
-    "If you're in immediate danger, contact local emergency services; in the U.S. 988 is available by call or text.\n\n")
+    "Are you safe right now, and what kind of support would be useful? "
+    "If anyone is in immediate danger, contact local emergency services. "
+    "For emotional crisis support in the U.S., you can call or text 988.\n\n")
